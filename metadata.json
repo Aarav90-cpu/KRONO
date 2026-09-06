@@ -2,5 +2,7 @@
   "name": "KRONO Decentralized Protocol",
   "description": "Next-generation decentralized creator stream, 45/45/10 settlement engine, autonomous ad auction, and viral referral network with dual feed architecture and light/dark theme support.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
