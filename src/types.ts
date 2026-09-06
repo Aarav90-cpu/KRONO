@@ -1,114 +1,54 @@
-export type ViewMode = 'feed' | 'creator-hub' | 'ad-manager' | 'network-referral' | 'explore';
+export type ViewMode = 'feed' | 'explore' | 'bookmarks' | 'profile';
 
-export type FeedSubMode = 'chrono' | 'viral';
+export type FeedSubMode = 'latest' | 'trending';
 
-export type FeedFilter = 'all' | 'following' | 'hyperlocal' | 'circles';
+export type FeedFilter = 'all' | 'following' | 'media';
 
-export interface CreatorPost {
+export interface PostComment {
+  id: string;
+  author: {
+    name: string;
+    handle: string;
+    avatar: string;
+  };
+  timestamp: string;
+  content: string;
+}
+
+export interface Post {
   id: string;
   author: {
     name: string;
     handle: string;
     avatar: string;
     verified: boolean;
-    hexId: string;
-    node: string;
+    bio?: string;
   };
   timestamp: string;
-  earnedAmount: string;
   content: string;
   mediaUrl?: string;
-  shaderBadge?: {
-    nodeId: string;
-    fps: string;
-  };
+  tags?: string[];
   metrics: {
     likes: number;
     comments: number;
-    remixes: number;
+    shares: number;
     isLiked?: boolean;
     isBookmarked?: boolean;
   };
-  isSponsored?: boolean;
-  sponsorDetails?: {
-    brandName: string;
-    tagline: string;
-    adSplit: {
-      creator: string;
-      viewerRef: string;
-      platform: string;
-    };
-    ctaText: string;
-    ctaHeadline: string;
-    impressions: string;
-    distributedAmount: string;
-  };
-  isEphemeralDrop?: boolean;
-  ephemeralDetails?: {
-    beaconId: string;
-    distance: string;
-    timeLeft: string;
-    peersNearby: number;
-    coordinates: string;
-    claimed?: boolean;
-  };
+  commentsList?: PostComment[];
 }
 
-export interface ContentSettlementRow {
-  id: string;
-  title: string;
-  castId: string;
-  timeAgo: string;
-  icon: string;
-  trueImpr: string;
-  dwellTime: string;
-  dwellPercent: string;
-  engagementRate: string;
-  remixesCount: number;
-  netYield: string;
-  isSwept: boolean;
+export interface TrendingTopic {
+  tag: string;
+  postsCount: string;
+  category: string;
 }
 
-export interface ReferralNode {
+export interface SuggestedUser {
   id: string;
   name: string;
   handle: string;
   avatar: string;
-  tier: 'Tier 1 Direct' | 'Tier 2 Viral';
-  impressions24h: string;
-  grossGenerated: string;
-  protocolCut: string;
-  status: 'Streaming' | 'Idle';
-}
-
-export interface AdCampaign {
-  id: string;
-  name: string;
-  tag: string;
-  txid: string;
-  verificationBadge: string;
-  objective: string;
-  placement: string;
-  delivered: number;
-  total: number;
-  ctr: string;
-  clicks: number;
-  ecpm: string;
-  winRate: string;
-  fatigueAvg: string;
-  fatigueCap: string;
-  spent: string;
-  spentPercent: number;
-  status: 'ACTIVE' | 'COMPLETED' | 'PAUSED';
-}
-
-export interface HyperlocalDrop {
-  id: string;
-  geoRadius: string;
-  timeLeft: string;
-  title: string;
-  description: string;
-  teleViews: string;
-  unlockConv: string;
-  yield: string;
+  bio: string;
+  isFollowing?: boolean;
 }

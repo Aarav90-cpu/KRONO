@@ -1,139 +1,228 @@
 import React, { useState } from 'react';
-import {
-  Grid,
-  Sparkles,
-  ExternalLink,
-  Code,
-  Search,
-} from 'lucide-react';
+import { Search, Flame, Users, Sparkles, MessageSquare, Heart, CheckCircle, ExternalLink } from 'lucide-react';
+import { TRENDING_TOPICS, SUGGESTED_USERS } from '../data/mockData';
+import { SuggestedUser } from '../types';
 
 interface ExploreViewProps {
-  onOpenRemixModal: () => void;
   onNotify: (title: string, message: string, type?: 'success' | 'info' | 'warning') => void;
+  onSelectTag?: (tag: string) => void;
 }
 
 export const ExploreView: React.FC<ExploreViewProps> = ({
-  onOpenRemixModal,
   onNotify,
+  onSelectTag,
 }) => {
-  const [filterCategory, setFilterCategory] = useState<'all' | 'shaders' | 'audio' | 'ai'>('all');
   const [search, setSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState<'all' | 'Tech' | 'Programming' | 'Art & Design' | 'Culture'>('all');
+  const [users, setUsers] = useState<SuggestedUser[]>(SUGGESTED_USERS);
 
-  const items = [
-    {
-      id: 'exp-1',
-      title: 'Real-Time Fluid Vertex Deformation',
-      category: 'shaders',
-      author: '@valeria',
-      fps: '120 FPS',
-      forks: 96,
-      yield: '+$142.50',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuB5BJOp1UWJFutocVw03ynbgHglUyi4WwRooLo7gJ1gWPjia-mn-1biPpIQIofHACTX1GPUQg90xZUlLSXD1WnUX3GuS22FeoJGaAzN44y3Y7F_HpfWQYD8iSdnfpkPWfVVI4zlvCPpoHXM0v4-Ag9gM1I92Vu-gFdTZ4yF0Oa_SRUHuEAQq5KTONRsS3IJ9ZjR-1fUVK6Xfx2EcEOI06FeKVsmT7rft9r4VbbvyuL3306Qk7Py1_5fgg',
-    },
-    {
-      id: 'exp-2',
-      title: 'NeuroPulse Decentralized GPU Cluster',
-      category: 'ai',
-      author: '@neuropulse',
-      fps: '18k NODES',
-      forks: 24,
-      yield: '+$446.40',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDSmDerXdhLgncWO2uRkXrUCyMgBolgH98bIN8o60kPq8vAnG2lZ2RrXKSD_vCsF17pY0Twk1ioNrstBEOXk_NdkLjAIcO_naKc8y-7yXExQBOv-aBAVDyNSI1ORR5zC_mCz85vvknI6OyXu3srPS1CWYuOIcOZPlTX8817AuqAavIth5KM6tNyH0Z7mFeDk34_DmtqwYfSTRoAKv3SlXE_8SBmtmtcdJ5eqb4wknt9rfATAAT_5cx4NQ',
-    },
-    {
-      id: 'exp-3',
-      title: 'Cross-Post Viral Video Auto-Watermarker',
-      category: 'audio',
-      author: '@v_nova',
-      fps: '4K LOSSLESS',
-      forks: 142,
-      yield: '+$318.40',
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuClLwGdazsngoGL6SmkqIXfgFsT7N-xAPtNp3m9OZFdQ2W7MiZhnXNvRzGhT2xi7pvKDLR1mNNoddIq-5pnw6OQAOyYnG4_IYOduulcYXfGSsgpp1DwfaSAXw6Jrk39RkpRGc-y8dGYMKxapr2lzj9tnCVXCC7XDxkGhigRQUtpC0R4t3v9PkUEA-hzEcdiqvuvwQwbwMXUxfYuvNbficQrlMaYZhj_-elDw7b9H3cDJLVyd3C7IC9fqA',
-    },
-  ];
+  const categories = ['all', 'Tech', 'Programming', 'Art & Design', 'Culture'];
 
-  const filteredItems = items.filter((item) => {
-    if (filterCategory !== 'all' && item.category !== filterCategory) return false;
-    if (search && !item.title.toLowerCase().includes(search.toLowerCase()) && !item.author.toLowerCase().includes(search.toLowerCase())) return false;
+  const handleToggleFollow = (id: string, name: string) => {
+    setUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === id) {
+          const next = !u.isFollowing;
+          onNotify(
+            next ? `Following ${name}` : `Unfollowed ${name}`,
+            next ? `You'll now see posts from ${name} in your Following feed.` : `Removed from your following feed.`,
+            'info'
+          );
+          return { ...u, isFollowing: next };
+        }
+        return u;
+      })
+    );
+  };
+
+  const filteredTopics = TRENDING_TOPICS.filter((t) => {
+    if (activeCategory !== 'all' && t.category !== activeCategory && !t.category.includes(activeCategory)) return false;
+    if (search && !t.tag.toLowerCase().includes(search.toLowerCase()) && !t.category.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
+  const featuredPosts = [
+    {
+      id: 'feat-1',
+      title: 'Decentralized Social Networks: An Open Architectural Blueprint',
+      author: '@elena_dev',
+      category: 'Tech',
+      likes: '1.2K',
+      image: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      id: 'feat-2',
+      title: 'Brutalist Architecture & Urban Photography in Tokyo',
+      author: '@devon_visuals',
+      category: 'Art & Design',
+      likes: '890',
+      image: 'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      id: 'feat-3',
+      title: 'Minimalist Typography: Why Line-Height & Tracking Shape Readability',
+      author: '@mayadesign',
+      category: 'Culture',
+      likes: '640',
+      image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&auto=format&fit=crop&q=80',
+    },
+  ];
+
   return (
     <div className="w-full flex flex-col gap-6 pb-12">
-      {/* Header */}
-      <div className="p-5 sm:p-6 rounded-xl bg-surface border border-border-glass-dark flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold text-on-surface">
-              Media Matrix & Shader Registry
-            </h1>
-            <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">
-              12% Secondary Cut
-            </span>
-          </div>
-          <p className="text-xs sm:text-sm text-on-surface-variant max-w-xl leading-relaxed">
-            Fork interactive WebGL shaders, generative pipelines, and decentralized AI nodes. Every derivative locks in royalties to the creator.
-          </p>
+      {/* Search Header */}
+      <div className="p-4 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-3">
+        <div className="relative w-full">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-outline" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Explore trending hashtags, articles, and community creators..."
+            className="w-full pl-10 pr-4 py-2.5 bg-surface-container-low border border-border-glass-dark rounded-xl text-xs sm:text-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary/50 transition-colors"
+          />
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
-          {(['all', 'shaders', 'audio', 'ai'] as const).map((cat) => (
+        {/* Categories */}
+        <div className="flex items-center gap-1.5 overflow-x-auto text-xs pt-1">
+          {categories.map((cat) => (
             <button
               key={cat}
-              onClick={() => setFilterCategory(cat)}
-              className={`px-3 py-1.5 rounded-lg capitalize transition-colors cursor-pointer ${
-                filterCategory === cat
+              onClick={() => setActiveCategory(cat as any)}
+              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer capitalize whitespace-nowrap ${
+                activeCategory === cat
                   ? 'bg-primary-container text-white font-semibold'
                   : 'bg-surface-container text-outline hover:text-on-surface'
               }`}
             >
-              {cat}
+              {cat === 'all' ? 'All Topics' : cat}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredItems.map((item) => (
-          <div
-            key={item.id}
-            className="rounded-xl bg-surface border border-border-glass-dark flex flex-col justify-between overflow-hidden hover:border-outline/40 transition-colors"
-          >
-            <div className="relative aspect-video bg-black">
-              <img
-                src={item.image}
-                alt={item.title}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded bg-black/70 text-white font-mono text-[10px]">
-                {item.fps}
-              </div>
-              <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white text-xs">
-                <span className="font-mono">{item.author}</span>
-                <span className="text-secondary font-mono font-bold">{item.yield}</span>
-              </div>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column: Trending Topics & Stories */}
+        <div className="lg:col-span-8 flex flex-col gap-6">
+          {/* Trending Topics Grid */}
+          <div className="p-5 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-4">
+            <h2 className="text-sm font-bold text-on-surface flex items-center gap-2">
+              <Flame className="w-4 h-4 text-amber-500" />
+              <span>Trending Discussions</span>
+            </h2>
 
-            <div className="p-4 flex flex-col gap-3">
-              <h3 className="font-semibold text-xs text-on-surface line-clamp-1">
-                {item.title}
-              </h3>
-
-              <div className="flex items-center justify-between pt-2 border-t border-border-glass-dark text-xs text-outline">
-                <span>{item.forks} active forks</span>
-                <button
-                  onClick={onOpenRemixModal}
-                  className="px-3 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface font-medium transition-colors flex items-center gap-1 cursor-pointer"
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {filteredTopics.map((topic) => (
+                <div
+                  key={topic.tag}
+                  onClick={() => onSelectTag && onSelectTag(topic.tag)}
+                  className="p-3.5 rounded-lg bg-surface-container-low border border-border-glass-dark hover:border-primary/40 transition-all cursor-pointer flex justify-between items-center group"
                 >
-                  <Sparkles className="w-3 h-3 text-secondary" />
-                  <span>Remix Node</span>
-                </button>
-              </div>
+                  <div className="flex flex-col">
+                    <span className="text-[11px] text-outline uppercase tracking-wider">
+                      {topic.category}
+                    </span>
+                    <span className="text-sm font-bold text-on-surface group-hover:text-primary transition-colors">
+                      {topic.tag}
+                    </span>
+                  </div>
+                  <span className="text-xs font-mono text-outline">
+                    {topic.postsCount}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
+
+          {/* Featured Highlights Grid */}
+          <div className="p-5 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-4">
+            <h2 className="text-sm font-bold text-on-surface flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span>Community Highlights</span>
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {featuredPosts.map((post) => (
+                <div
+                  key={post.id}
+                  className="rounded-xl overflow-hidden border border-border-glass-dark bg-surface-container-low flex flex-col group cursor-pointer hover:border-primary/40 transition-all"
+                >
+                  <div className="h-32 overflow-hidden">
+                    <img
+                      src={post.image}
+                      alt={post.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                  <div className="p-3 flex flex-col gap-1.5 flex-1 justify-between">
+                    <div>
+                      <span className="text-[10px] font-semibold text-primary uppercase">
+                        {post.category}
+                      </span>
+                      <h3 className="text-xs font-bold text-on-surface leading-snug line-clamp-2 mt-0.5">
+                        {post.title}
+                      </h3>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-outline pt-2 border-t border-border-glass-dark">
+                      <span>{post.author}</span>
+                      <span className="flex items-center gap-1">
+                        <Heart className="w-3 h-3 text-red-400" />
+                        {post.likes}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Suggested Creators */}
+        <div className="lg:col-span-4 flex flex-col gap-6">
+          <div className="p-5 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-4">
+            <h2 className="text-sm font-bold text-on-surface flex items-center gap-2">
+              <Users className="w-4 h-4 text-secondary" />
+              <span>Who to Follow</span>
+            </h2>
+
+            <div className="flex flex-col gap-3.5">
+              {users.map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-start justify-between gap-3 pb-3 border-b border-border-glass-dark last:border-b-0 last:pb-0"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <img
+                      src={user.avatar}
+                      alt={user.name}
+                      className="w-10 h-10 rounded-full object-cover shrink-0"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-on-surface">
+                        {user.name}
+                      </span>
+                      <span className="text-[11px] text-outline">{user.handle}</span>
+                      <p className="text-[11px] text-on-surface-variant mt-1 line-clamp-2 leading-relaxed">
+                        {user.bio}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleToggleFollow(user.id, user.name)}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold shrink-0 transition-colors cursor-pointer ${
+                      user.isFollowing
+                        ? 'border border-border-glass-dark text-on-surface hover:bg-surface-container'
+                        : 'bg-primary-container text-white hover:opacity-90'
+                    }`}
+                  >
+                    {user.isFollowing ? 'Following' : 'Follow'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

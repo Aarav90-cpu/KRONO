@@ -1,23 +1,23 @@
 import React from 'react';
-import { ViewMode, FeedFilter } from '../types';
+import { ViewMode, FeedFilter, TrendingTopic } from '../types';
 import {
-  Clock,
-  Zap,
-  Lock,
-  Grid,
-  Coins,
-  Server,
-  Activity,
-  ShieldCheck,
-  Compass,
+  Home,
   Users,
+  Flame,
+  Compass,
+  Bookmark,
+  User,
+  Hash,
+  Sparkles,
 } from 'lucide-react';
+import { TRENDING_TOPICS } from '../data/mockData';
 
 interface SidebarProps {
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
   feedFilter: FeedFilter;
   onFeedFilterChange: (filter: FeedFilter) => void;
+  onSelectTag?: (tag: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -25,13 +25,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onViewChange,
   feedFilter,
   onFeedFilterChange,
+  onSelectTag,
 }) => {
   return (
     <aside className="w-60 shrink-0 flex flex-col gap-6 select-none">
-      {/* Navigation */}
+      {/* Primary Feeds */}
       <div className="flex flex-col gap-1">
         <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-outline">
-          Streams
+          Feeds
         </div>
 
         <button
@@ -39,15 +40,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onViewChange('feed');
             onFeedFilterChange('all');
           }}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
             currentView === 'feed' && feedFilter === 'all'
-              ? 'bg-surface-container text-on-surface font-semibold'
+              ? 'bg-surface-container text-on-surface font-semibold shadow-xs'
               : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
           }`}
         >
           <div className="flex items-center gap-2.5">
-            <Clock className="w-4 h-4 text-primary" />
-            <span>All Posts</span>
+            <Home className="w-4 h-4 text-primary" />
+            <span>Home Feed</span>
           </div>
         </button>
 
@@ -56,9 +57,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onViewChange('feed');
             onFeedFilterChange('following');
           }}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
             currentView === 'feed' && feedFilter === 'following'
-              ? 'bg-surface-container text-on-surface font-semibold'
+              ? 'bg-surface-container text-on-surface font-semibold shadow-xs'
               : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
           }`}
         >
@@ -70,125 +71,91 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <button
           onClick={() => {
-            onViewChange('feed');
-            onFeedFilterChange('hyperlocal');
-          }}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-            currentView === 'feed' && feedFilter === 'hyperlocal'
-              ? 'bg-surface-container text-on-surface font-semibold'
-              : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
-          }`}
-        >
-          <div className="flex items-center gap-2.5">
-            <Zap className="w-4 h-4 text-tertiary" />
-            <span>Local Drops</span>
-          </div>
-        </button>
-
-        <button
-          onClick={() => {
             onViewChange('explore');
           }}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
             currentView === 'explore'
-              ? 'bg-surface-container text-on-surface font-semibold'
+              ? 'bg-surface-container text-on-surface font-semibold shadow-xs'
               : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
           }`}
         >
           <div className="flex items-center gap-2.5">
             <Compass className="w-4 h-4 text-primary" />
-            <span>Media Matrix</span>
+            <span>Explore</span>
           </div>
         </button>
       </div>
 
-      {/* Protocol Sections */}
+      {/* Library & Profile */}
       <div className="flex flex-col gap-1">
         <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-outline">
-          Management
+          Library
         </div>
 
         <button
-          onClick={() => onViewChange('creator-hub')}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-            currentView === 'creator-hub'
-              ? 'bg-surface-container text-on-surface font-semibold'
+          onClick={() => onViewChange('bookmarks')}
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+            currentView === 'bookmarks'
+              ? 'bg-surface-container text-on-surface font-semibold shadow-xs'
               : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
           }`}
         >
           <div className="flex items-center gap-2.5">
-            <Coins className="w-4 h-4 text-secondary" />
-            <span>Creator Hub</span>
+            <Bookmark className="w-4 h-4 text-secondary" />
+            <span>Bookmarks</span>
           </div>
         </button>
 
         <button
-          onClick={() => onViewChange('ad-manager')}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-            currentView === 'ad-manager'
-              ? 'bg-surface-container text-on-surface font-semibold'
+          onClick={() => onViewChange('profile')}
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+            currentView === 'profile'
+              ? 'bg-surface-container text-on-surface font-semibold shadow-xs'
               : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
           }`}
         >
           <div className="flex items-center gap-2.5">
-            <Activity className="w-4 h-4 text-primary" />
-            <span>Ad Manager</span>
-          </div>
-        </button>
-
-        <button
-          onClick={() => onViewChange('network-referral')}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-            currentView === 'network-referral'
-              ? 'bg-surface-container text-on-surface font-semibold'
-              : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
-          }`}
-        >
-          <div className="flex items-center gap-2.5">
-            <Server className="w-4 h-4 text-tertiary" />
-            <span>Referrals & Nodes</span>
+            <User className="w-4 h-4 text-tertiary" />
+            <span>My Profile</span>
           </div>
         </button>
       </div>
 
-      {/* 45/45/10 Protocol Split Card */}
-      <div className="p-3.5 rounded-xl bg-surface-container-low border border-border-glass-dark flex flex-col gap-2.5">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold text-outline uppercase tracking-wider">
-            Revenue Split
+      {/* Trending Topics Box */}
+      <div className="p-3.5 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-2.5">
+        <div className="flex items-center justify-between pb-1.5 border-b border-border-glass-dark">
+          <span className="text-[11px] font-semibold text-outline uppercase tracking-wider flex items-center gap-1.5">
+            <Flame className="w-3.5 h-3.5 text-amber-500" />
+            <span>Trending Now</span>
           </span>
-          <span className="text-[11px] font-mono font-medium text-secondary">45/45/10</span>
         </div>
 
-        <div className="flex flex-col gap-1.5 text-xs">
-          <div className="flex justify-between text-on-surface">
-            <span>Creators</span>
-            <span className="font-semibold text-secondary">45%</span>
-          </div>
-          <div className="w-full h-1 bg-surface-container rounded-full overflow-hidden">
-            <div className="h-full bg-secondary rounded-full" style={{ width: '45%' }}></div>
-          </div>
-
-          <div className="flex justify-between text-on-surface mt-1">
-            <span>Relay Nodes</span>
-            <span className="font-semibold text-primary">45%</span>
-          </div>
-          <div className="w-full h-1 bg-surface-container rounded-full overflow-hidden">
-            <div className="h-full bg-primary rounded-full" style={{ width: '45%' }}></div>
-          </div>
-
-          <div className="flex justify-between text-on-surface mt-1">
-            <span>Referrers</span>
-            <span className="font-semibold text-tertiary">10%</span>
-          </div>
-          <div className="w-full h-1 bg-surface-container rounded-full overflow-hidden">
-            <div className="h-full bg-tertiary rounded-full" style={{ width: '10%' }}></div>
-          </div>
+        <div className="flex flex-col gap-2 text-xs">
+          {TRENDING_TOPICS.slice(0, 4).map((topic) => (
+            <button
+              key={topic.tag}
+              onClick={() => {
+                if (onSelectTag) {
+                  onSelectTag(topic.tag);
+                } else {
+                  onViewChange('explore');
+                }
+              }}
+              className="flex flex-col text-left group cursor-pointer"
+            >
+              <span className="text-on-surface font-semibold group-hover:text-primary transition-colors">
+                {topic.tag}
+              </span>
+              <span className="text-[10px] text-outline">{topic.postsCount}</span>
+            </button>
+          ))}
         </div>
+      </div>
 
-        <div className="pt-2 border-t border-border-glass-dark text-[11px] text-outline text-center">
-          100% direct revenue distribution
-        </div>
+      {/* Clean Open Source Note */}
+      <div className="px-3 text-[11px] text-outline leading-relaxed">
+        <p>© 2026 KRONO</p>
+        <p className="mt-0.5">An open-source, decentralized social network built for community.</p>
       </div>
     </aside>
   );
