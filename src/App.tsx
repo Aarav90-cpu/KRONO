@@ -18,8 +18,12 @@ import { ToastContainer, ToastMessage } from './components/Toast';
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>('feed');
   const [isDark, setIsDark] = useState<boolean>(() => {
-    const saved = localStorage.getItem('krono_theme');
-    return saved !== null ? saved === 'dark' : true;
+    try {
+      const saved = localStorage.getItem('krono_theme');
+      return saved !== null ? saved === 'dark' : true;
+    } catch {
+      return true;
+    }
   });
 
   const [feedSubMode, setFeedSubMode] = useState<FeedSubMode>('chrono');
@@ -45,12 +49,16 @@ export default function App() {
 
   // Apply dark mode class to html element
   useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('krono_theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('krono_theme', 'light');
+    try {
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('krono_theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('krono_theme', 'light');
+      }
+    } catch {
+      // ignore storage write errors
     }
   }, [isDark]);
 
