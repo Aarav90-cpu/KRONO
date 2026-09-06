@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FeedSubMode, FeedFilter, Post, PostComment } from '../types';
+import { FeedSubMode, FeedFilter, Post, PostComment, AuthUserProfile } from '../types';
 import {
   Clock,
   Flame,
@@ -12,6 +12,10 @@ import {
   Sparkles,
   Check,
   CheckCircle,
+  Lock,
+  KeyRound,
+  Eye,
+  ShieldCheck,
 } from 'lucide-react';
 import { TRENDING_TOPICS, SUGGESTED_USERS } from '../data/mockData';
 
@@ -28,6 +32,8 @@ interface FeedViewProps {
   onToggleBookmark: (postId: string) => void;
   onToggleLike: (postId: string) => void;
   onAddComment: (postId: string, commentText: string) => void;
+  currentUser?: AuthUserProfile | null;
+  onOpenAuthModal?: (tab?: 'signin' | 'profile' | 'credentials' | '2fa' | 'setup-guide') => void;
 }
 
 export const FeedView: React.FC<FeedViewProps> = ({
@@ -43,6 +49,8 @@ export const FeedView: React.FC<FeedViewProps> = ({
   onToggleBookmark,
   onToggleLike,
   onAddComment,
+  currentUser,
+  onOpenAuthModal,
 }) => {
   const [composerText, setComposerText] = useState('');
   const [composerMediaUrl, setComposerMediaUrl] = useState('');
@@ -171,74 +179,125 @@ export const FeedView: React.FC<FeedViewProps> = ({
           </div>
         </div>
 
-        {/* Post Composer Card */}
-        <div className="p-4 sm:p-5 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-3">
-          <div className="flex gap-3">
-            <img
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ"
-              alt="You"
-              className="w-9 h-9 rounded-full object-cover shrink-0"
-            />
-            <div className="flex-1 flex flex-col gap-2.5">
-              <textarea
-                value={composerText}
-                onChange={(e) => setComposerText(e.target.value)}
-                rows={2}
-                placeholder="What's happening in your corner of the web?"
-                className="w-full bg-surface-container-low border border-border-glass-dark rounded-lg p-3 text-xs sm:text-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary/50 resize-none transition-colors"
-              />
-
-              {showMediaInput && (
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={composerMediaUrl}
-                    onChange={(e) => setComposerMediaUrl(e.target.value)}
-                    placeholder="Paste image URL (https://...)"
-                    className="flex-1 px-3 py-1.5 bg-surface-container-low border border-border-glass-dark rounded-lg text-xs text-on-surface focus:outline-none focus:border-primary"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowMediaInput(false)}
-                    className="text-xs text-outline px-2 hover:text-on-surface"
-                  >
-                    Clear
-                  </button>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-outline pt-1">
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowMediaInput(!showMediaInput)}
-                    className={`flex items-center gap-1 transition-colors cursor-pointer ${
-                      showMediaInput ? 'text-primary' : 'hover:text-on-surface'
-                    }`}
-                  >
-                    <Image className="w-4 h-4" />
-                    <span>Photo</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px] text-outline">
-                    {280 - composerText.length}
+        {/* Guest Mode Notice Banner */}
+        {!currentUser && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-primary/10 via-primary/5 to-surface border border-primary/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                <Eye className="w-5 h-5" />
+              </div>
+              <div className="text-xs space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-on-surface text-sm">Browsing as Guest</span>
+                  <span className="text-[10px] bg-surface-container px-2 py-0.5 rounded-full border border-border-glass-dark text-outline font-semibold">
+                    Read-Only Mode
                   </span>
-                  <button
-                    type="button"
-                    onClick={handlePublish}
-                    disabled={!composerText.trim()}
-                    className="px-4 py-1.5 rounded-lg bg-primary-container text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Post</span>
-                  </button>
+                </div>
+                <p className="text-outline text-xs leading-relaxed">
+                  You can explore public feeds, search topics, and read replies freely. To <strong>like, comment, post, and bookmark</strong>, sign in with Google (must be 13 or older).
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onOpenAuthModal?.('signin')}
+              className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5 shrink-0 shadow-sm cursor-pointer self-stretch sm:self-auto justify-center"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>Sign In (13+)</span>
+            </button>
+          </div>
+        )}
+
+        {/* Post Composer Card (or Guest Sign-In Prompt) */}
+        {!currentUser ? (
+          <div className="p-4 sm:p-5 rounded-xl bg-surface border border-border-glass-dark flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-surface-container-low border border-border-glass-dark flex items-center justify-center text-outline shrink-0">
+                <Lock className="w-4 h-4 text-primary" />
+              </div>
+              <div className="text-xs">
+                <span className="font-semibold text-on-surface block">Want to join the conversation?</span>
+                <span className="text-outline text-[11px]">Sign in with Google (13+ only) to publish posts and interact.</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onOpenAuthModal?.('signin')}
+              className="px-3.5 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:opacity-90 transition-opacity cursor-pointer shrink-0"
+            >
+              Sign In to Post
+            </button>
+          </div>
+        ) : (
+          <div className="p-4 sm:p-5 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-3">
+            <div className="flex gap-3">
+              <img
+                src={currentUser.avatar}
+                alt={currentUser.name}
+                className="w-9 h-9 rounded-full object-cover shrink-0 border border-primary/30"
+              />
+              <div className="flex-1 flex flex-col gap-2.5">
+                <textarea
+                  value={composerText}
+                  onChange={(e) => setComposerText(e.target.value)}
+                  rows={2}
+                  placeholder={`What's on your mind, ${currentUser.name.split(' ')[0]}?`}
+                  className="w-full bg-surface-container-low border border-border-glass-dark rounded-lg p-3 text-xs sm:text-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary/50 resize-none transition-colors"
+                />
+
+                {showMediaInput && (
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={composerMediaUrl}
+                      onChange={(e) => setComposerMediaUrl(e.target.value)}
+                      placeholder="Paste image URL (https://...)"
+                      className="flex-1 px-3 py-1.5 bg-surface-container-low border border-border-glass-dark rounded-lg text-xs text-on-surface focus:outline-none focus:border-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowMediaInput(false)}
+                      className="text-xs text-outline px-2 hover:text-on-surface"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-outline pt-1">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowMediaInput(!showMediaInput)}
+                      className={`flex items-center gap-1 transition-colors cursor-pointer ${
+                        showMediaInput ? 'text-primary' : 'hover:text-on-surface'
+                      }`}
+                    >
+                      <Image className="w-4 h-4" />
+                      <span>Photo</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] text-outline">
+                      {280 - composerText.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handlePublish}
+                      disabled={!composerText.trim()}
+                      className="px-4 py-1.5 rounded-lg bg-primary-container text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Post</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Post List */}
         <div className="flex flex-col gap-3.5">
@@ -398,32 +457,48 @@ export const FeedView: React.FC<FeedViewProps> = ({
                         </div>
                       )}
 
-                      {/* Comment Input */}
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={commentDraft}
-                          onChange={(e) =>
-                            setCommentInputs((prev) => ({
-                              ...prev,
-                              [post.id]: e.target.value,
-                            }))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSendComment(post.id);
-                          }}
-                          placeholder="Write a reply..."
-                          className="flex-1 px-3 py-1.5 bg-surface-container-low border border-border-glass-dark rounded-lg text-xs text-on-surface focus:outline-none focus:border-primary"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleSendComment(post.id)}
-                          disabled={!commentDraft.trim()}
-                          className="px-3 py-1.5 bg-primary-container text-white text-xs font-semibold rounded-lg hover:opacity-90 disabled:opacity-40 cursor-pointer"
-                        >
-                          Reply
-                        </button>
-                      </div>
+                      {/* Comment Input or Guest Guard */}
+                      {!currentUser ? (
+                        <div className="p-3 rounded-lg bg-surface-container-low border border-border-glass-dark flex items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2 text-outline">
+                            <Lock className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <span>Sign in with Google (13+) to post comments.</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => onOpenAuthModal?.('signin')}
+                            className="px-3 py-1 bg-primary text-white text-[11px] font-semibold rounded-lg hover:opacity-90 cursor-pointer shrink-0"
+                          >
+                            Sign In
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={commentDraft}
+                            onChange={(e) =>
+                              setCommentInputs((prev) => ({
+                                ...prev,
+                                [post.id]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSendComment(post.id);
+                            }}
+                            placeholder="Write a reply..."
+                            className="flex-1 px-3 py-1.5 bg-surface-container-low border border-border-glass-dark rounded-lg text-xs text-on-surface focus:outline-none focus:border-primary"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSendComment(post.id)}
+                            disabled={!commentDraft.trim()}
+                            className="px-3 py-1.5 bg-primary-container text-white text-xs font-semibold rounded-lg hover:opacity-90 disabled:opacity-40 cursor-pointer"
+                          >
+                            Reply
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </article>
@@ -492,9 +567,14 @@ export const FeedView: React.FC<FeedViewProps> = ({
                 </div>
 
                 <button
-                  onClick={() =>
-                    onNotify('Followed', `You are now following ${user.name}`, 'info')
-                  }
+                  onClick={() => {
+                    if (!currentUser) {
+                      onOpenAuthModal?.('signin');
+                      onNotify('Sign In Required', 'Following creators is reserved for verified members (13+).', 'warning');
+                      return;
+                    }
+                    onNotify('Followed', `You are now following ${user.name}`, 'info');
+                  }}
                   className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-surface-container hover:bg-primary-container hover:text-white transition-colors cursor-pointer shrink-0"
                 >
                   Follow

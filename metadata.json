@@ -1,7 +1,9 @@
 {
   "name": "KRONO Decentralized Protocol",
   "description": "Next-generation open-source social media platform featuring timeline feeds, community posts, media sharing, explore discovery, and customizable light/dark themes.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": [
+    "geolocation"
+  ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

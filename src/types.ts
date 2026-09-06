@@ -52,3 +52,26 @@ export interface SuggestedUser {
   bio: string;
   isFollowing?: boolean;
 }
+
+export type TwoFactorMethod = 'totp' | 'phone';
+
+export interface AuthUserProfile {
+  uid: string;
+  email: string;
+  name: string;
+  username: string;
+  avatar: string;
+  provider: 'google' | 'custom';
+  twoFactorEnabled: boolean;
+  twoFactorMethod: TwoFactorMethod;
+  twoFactorVerified: boolean;
+  phoneNumber?: string;
+  totpSecret?: string;
+  backupCodes?: string[];
+  createdAt: string;
+  birthDate?: string;
+  age?: number;
+  ageVerified: boolean;
+  location?: string;
+}
+

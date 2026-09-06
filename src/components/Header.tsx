@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ViewMode } from '../types';
+import { ViewMode, AuthUserProfile } from '../types';
 import {
   Search,
   Plus,
@@ -11,6 +11,11 @@ import {
   Heart,
   MessageSquare,
   Sparkles,
+  Shield,
+  KeyRound,
+  LogOut,
+  Lock,
+  Eye,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -21,6 +26,9 @@ interface HeaderProps {
   onOpenCreatePostModal: () => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  currentUser: AuthUserProfile | null;
+  onOpenAuthModal: (tab?: 'signin' | 'profile' | 'credentials' | '2fa' | 'setup-guide') => void;
+  onSignOut: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,6 +39,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCreatePostModal,
   searchQuery,
   onSearchChange,
+  currentUser,
+  onOpenAuthModal,
+  onSignOut,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -196,77 +207,143 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* User Profile Avatar */}
-          <div className="relative">
-            <button
-              onClick={() => {
-                setShowUserMenu(!showUserMenu);
-                setShowNotifications(false);
-              }}
-              className="flex items-center rounded-full ring-2 ring-transparent hover:ring-primary transition-all cursor-pointer"
-            >
-              <img
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ"
-                alt="Profile"
-                className="w-8 h-8 rounded-full object-cover"
-              />
-            </button>
+          {/* User Profile / Auth Area */}
+          {currentUser ? (
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowUserMenu(!showUserMenu);
+                  setShowNotifications(false);
+                }}
+                className="flex items-center gap-2 rounded-full p-0.5 ring-2 ring-transparent hover:ring-primary transition-all cursor-pointer"
+              >
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser.name}
+                  className="w-8 h-8 rounded-full object-cover border border-border-glass-dark"
+                />
+              </button>
 
-            {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-56 rounded-xl bg-surface border border-border-glass-dark p-2 shadow-xl z-50 animate-in fade-in duration-150">
-                <div className="flex items-center gap-2.5 p-2 pb-2.5 border-b border-border-glass-dark">
-                  <img
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ"
-                    alt="Aarav"
-                    className="w-8 h-8 rounded-full object-cover"
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-semibold text-on-surface">Aarav</span>
-                    <span className="text-[11px] text-outline">@aarav</span>
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-60 rounded-xl bg-surface border border-border-glass-dark p-2 shadow-xl z-50 animate-in fade-in duration-150">
+                  <div className="flex items-center gap-2.5 p-2 pb-2.5 border-b border-border-glass-dark">
+                    <img
+                      src={currentUser.avatar}
+                      alt={currentUser.name}
+                      className="w-9 h-9 rounded-full object-cover border border-primary/30"
+                    />
+                    <div className="flex flex-col overflow-hidden">
+                      <span className="text-xs font-bold text-on-surface truncate">{currentUser.name}</span>
+                      <span className="text-[11px] text-outline font-mono truncate">{currentUser.username}</span>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block"></span>
+                        <span className="text-[10px] text-primary font-medium">2FA Active</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="py-1 flex flex-col gap-0.5 text-xs">
+                    <button
+                      onClick={() => {
+                        onViewChange('profile');
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-on-surface hover:bg-surface-container transition-colors cursor-pointer text-left"
+                    >
+                      <User className="w-3.5 h-3.5 text-outline" />
+                      <span>My Profile</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onOpenAuthModal('profile');
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-on-surface hover:bg-surface-container transition-colors cursor-pointer text-left"
+                    >
+                      <User className="w-3.5 h-3.5 text-primary" />
+                      <span>Edit Name & Handle</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onOpenAuthModal('credentials');
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-on-surface hover:bg-surface-container transition-colors cursor-pointer text-left"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-secondary" />
+                      <span>Change Email & Password</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onOpenAuthModal('2fa');
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-on-surface hover:bg-surface-container transition-colors cursor-pointer text-left"
+                    >
+                      <Shield className="w-3.5 h-3.5 text-primary" />
+                      <span>Compulsory 2FA Settings</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onViewChange('bookmarks');
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-on-surface hover:bg-surface-container transition-colors cursor-pointer text-left"
+                    >
+                      <Bookmark className="w-3.5 h-3.5 text-outline" />
+                      <span>Bookmarks</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onToggleTheme();
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-on-surface hover:bg-surface-container transition-colors cursor-pointer text-left"
+                    >
+                      {isDark ? (
+                        <Sun className="w-3.5 h-3.5 text-outline" />
+                      ) : (
+                        <Moon className="w-3.5 h-3.5 text-outline" />
+                      )}
+                      <span>{isDark ? 'Light Theme' : 'Dark Theme'}</span>
+                    </button>
+
+                    <div className="my-1 border-t border-border-glass-dark"></div>
+
+                    <button
+                      onClick={() => {
+                        onSignOut();
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-error hover:bg-error/10 transition-colors cursor-pointer text-left"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
                   </div>
                 </div>
-
-                <div className="py-1 flex flex-col gap-0.5 text-xs">
-                  <button
-                    onClick={() => {
-                      onViewChange('profile');
-                      setShowUserMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-on-surface hover:bg-surface-container transition-colors cursor-pointer text-left"
-                  >
-                    <User className="w-3.5 h-3.5 text-outline" />
-                    <span>My Profile</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      onViewChange('bookmarks');
-                      setShowUserMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-on-surface hover:bg-surface-container transition-colors cursor-pointer text-left"
-                  >
-                    <Bookmark className="w-3.5 h-3.5 text-outline" />
-                    <span>Bookmarks</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      onToggleTheme();
-                      setShowUserMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-on-surface hover:bg-surface-container transition-colors cursor-pointer text-left"
-                  >
-                    {isDark ? (
-                      <Sun className="w-3.5 h-3.5 text-outline" />
-                    ) : (
-                      <Moon className="w-3.5 h-3.5 text-outline" />
-                    )}
-                    <span>{isDark ? 'Light Theme' : 'Dark Theme'}</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container text-outline text-[11px] font-medium border border-border-glass-dark">
+                <Eye className="w-3 h-3 text-outline" />
+                <span>Guest Mode</span>
+              </span>
+              <button
+                onClick={() => onOpenAuthModal('signin')}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-white text-xs font-semibold hover:opacity-90 transition-all shadow-sm hover:shadow cursor-pointer"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Sign In (13+)</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

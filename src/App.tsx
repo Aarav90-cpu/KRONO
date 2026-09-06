@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ViewMode, FeedSubMode, FeedFilter, Post } from './types';
+import { ViewMode, FeedSubMode, FeedFilter, Post, AuthUserProfile } from './types';
 import { INITIAL_POSTS } from './data/mockData';
+import { auth } from './firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Footer } from './components/Footer';
@@ -9,6 +11,7 @@ import { ExploreView } from './components/ExploreView';
 import { BookmarksView } from './components/BookmarksView';
 import { ProfileView } from './components/ProfileView';
 import { CastModal } from './components/CastModal';
+import { AuthModal } from './components/AuthModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 
 export default function App() {
@@ -26,6 +29,24 @@ export default function App() {
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Authentication State
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalInitialTab, setAuthModalInitialTab] = useState<
+    'signin' | 'profile' | 'credentials' | '2fa' | 'setup-guide'
+  >('signin');
+  const [currentUser, setCurrentUser] = useState<AuthUserProfile | null>(() => {
+    try {
+      const activeUid = localStorage.getItem('krono_active_uid');
+      if (activeUid) {
+        const stored = localStorage.getItem(`krono_profile_${activeUid}`);
+        if (stored) return JSON.parse(stored);
+      }
+    } catch {
+      // fallback
+    }
+    return null;
+  });
+
   // Posts State
   const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
 
@@ -34,6 +55,47 @@ export default function App() {
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Listen to Firebase Auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const stored = localStorage.getItem(`krono_profile_${firebaseUser.uid}`);
+          if (stored) {
+            const profile: AuthUserProfile = JSON.parse(stored);
+            // Only set as active session if they have completed age verification (13+) and 2FA
+            if (profile.ageVerified && profile.twoFactorVerified) {
+              setCurrentUser(profile);
+              localStorage.setItem('krono_active_uid', firebaseUser.uid);
+            }
+          } else {
+            const newProfile: AuthUserProfile = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              name: firebaseUser.displayName || 'Krono Member',
+              username: `@${(firebaseUser.email?.split('@')[0] || 'member').toLowerCase()}`,
+              avatar:
+                firebaseUser.photoURL ||
+                'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ',
+              provider: 'google',
+              twoFactorEnabled: true,
+              twoFactorMethod: 'totp',
+              twoFactorVerified: false,
+              ageVerified: false,
+              location: '',
+              createdAt: new Date().toISOString(),
+            };
+            localStorage.setItem(`krono_profile_${firebaseUser.uid}`, JSON.stringify(newProfile));
+          }
+        } catch (err) {
+          console.error('Failed to sync auth state', err);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Apply dark mode class to html element
   useEffect(() => {
@@ -79,14 +141,30 @@ export default function App() {
     });
   };
 
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem('krono_active_uid');
+    setCurrentUser(null);
+    addToast('Signed Out', 'You have been signed out of your account.', 'info');
+  };
+
   const handleAddPost = (postData: Partial<Post>) => {
+    const activeName = currentUser?.name || 'Aarav';
+    const activeHandle = currentUser?.username || '@aarav';
+    const activeAvatar =
+      currentUser?.avatar ||
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ';
+
     const newPost: Post = {
       id: `post-${Date.now()}`,
       author: {
-        name: 'Aarav',
-        handle: '@aarav',
-        avatar:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ',
+        name: activeName,
+        handle: activeHandle,
+        avatar: activeAvatar,
         verified: true,
       },
       timestamp: 'Just now',
@@ -150,16 +228,21 @@ export default function App() {
   };
 
   const handleAddComment = (postId: string, commentText: string) => {
+    const activeName = currentUser?.name || 'Aarav';
+    const activeHandle = currentUser?.username || '@aarav';
+    const activeAvatar =
+      currentUser?.avatar ||
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ';
+
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id === postId) {
           const newComment = {
             id: `c-${Date.now()}`,
             author: {
-              name: 'Aarav',
-              handle: '@aarav',
-              avatar:
-                'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ',
+              name: activeName,
+              handle: activeHandle,
+              avatar: activeAvatar,
             },
             timestamp: 'Just now',
             content: commentText,
@@ -174,8 +257,9 @@ export default function App() {
     );
   };
 
+  const activeUserHandle = currentUser?.username || '@aarav';
   const bookmarkedPosts = posts.filter((p) => p.metrics.isBookmarked);
-  const userPosts = posts.filter((p) => p.author.handle === '@aarav');
+  const userPosts = posts.filter((p) => p.author.handle === activeUserHandle || p.author.handle === '@aarav');
 
   return (
     <div className="min-h-screen bg-background text-on-surface flex flex-col font-sans transition-colors duration-300 antialiased selection:bg-primary/20 selection:text-primary">
@@ -188,6 +272,12 @@ export default function App() {
         onOpenCreatePostModal={() => setIsCastModalOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        currentUser={currentUser}
+        onOpenAuthModal={(tab) => {
+          setAuthModalInitialTab(tab || 'signin');
+          setIsAuthModalOpen(true);
+        }}
+        onSignOut={handleSignOut}
       />
 
       {/* Main Layout Container */}
@@ -258,6 +348,11 @@ export default function App() {
               onToggleBookmark={handleToggleBookmark}
               onBackToFeed={() => setCurrentView('feed')}
               onNotify={addToast}
+              currentUser={currentUser}
+              onOpenAuthModal={(tab) => {
+                setAuthModalInitialTab(tab || 'profile');
+                setIsAuthModalOpen(true);
+              }}
             />
           )}
         </main>
@@ -271,6 +366,18 @@ export default function App() {
         isOpen={isCastModalOpen}
         onClose={() => setIsCastModalOpen(false)}
         onSubmitPost={handleAddPost}
+      />
+
+      {/* Full Authentication & 2FA Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        currentUser={currentUser}
+        onUpdateUser={(updated) => {
+          setCurrentUser(updated);
+        }}
+        onNotify={addToast}
+        initialTab={authModalInitialTab}
       />
 
       {/* Notification Toast Container */}

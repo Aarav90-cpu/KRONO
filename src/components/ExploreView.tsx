@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
-import { Search, Flame, Users, Sparkles, MessageSquare, Heart, CheckCircle, ExternalLink } from 'lucide-react';
+import { Search, Flame, Users, Sparkles, MessageSquare, Heart, CheckCircle, ExternalLink, Lock } from 'lucide-react';
 import { TRENDING_TOPICS, SUGGESTED_USERS } from '../data/mockData';
-import { SuggestedUser } from '../types';
+import { SuggestedUser, AuthUserProfile } from '../types';
 
 interface ExploreViewProps {
   onNotify: (title: string, message: string, type?: 'success' | 'info' | 'warning') => void;
   onSelectTag?: (tag: string) => void;
+  currentUser?: AuthUserProfile | null;
+  onOpenAuthModal?: (tab?: 'signin' | 'profile' | 'credentials' | '2fa' | 'setup-guide') => void;
 }
 
 export const ExploreView: React.FC<ExploreViewProps> = ({
   onNotify,
   onSelectTag,
+  currentUser,
+  onOpenAuthModal,
 }) => {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<'all' | 'Tech' | 'Programming' | 'Art & Design' | 'Culture'>('all');
@@ -19,6 +23,11 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
   const categories = ['all', 'Tech', 'Programming', 'Art & Design', 'Culture'];
 
   const handleToggleFollow = (id: string, name: string) => {
+    if (!currentUser) {
+      onOpenAuthModal?.('signin');
+      onNotify('Sign In Required', 'Following creators is reserved for verified members (13+). Please sign in.', 'warning');
+      return;
+    }
     setUsers((prev) =>
       prev.map((u) => {
         if (u.id === id) {
