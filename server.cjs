@@ -89,6 +89,7 @@ async function startServer() {
     const newPost = {
       id: `post-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       author: {
+        id: userId || author?.id,
         name: author?.name || "Krono Member",
         handle: author?.handle || author?.username || "@member",
         avatar: author?.avatar || "https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ",
@@ -218,33 +219,234 @@ async function startServer() {
   app.get("/api/users", (req, res) => {
     const db = readDb();
     const currentUid = req.query.currentUid;
-    const usersList = Object.values(db.users || {}).filter((u) => u && (!currentUid || u.uid !== currentUid)).map((u) => ({
-      id: u.uid,
-      name: u.name || "Community Member",
-      handle: u.username || "@member",
-      avatar: u.avatar || "",
-      bio: u.bio || "",
-      isFollowing: false
-    }));
+    const currentUser = currentUid ? db.users[currentUid] : null;
+    const currentFollowing = Array.isArray(currentUser?.following) ? currentUser.following : [];
+    const authorsMap = /* @__PURE__ */ new Map();
+    for (const post of db.posts || []) {
+      if (post.author?.handle) {
+        const handle = post.author.handle;
+        if (!authorsMap.has(handle.toLowerCase())) {
+          authorsMap.set(handle.toLowerCase(), {
+            id: post.author.id || handle,
+            name: post.author.name || handle.replace("@", ""),
+            handle,
+            avatar: post.author.avatar || "",
+            bio: post.author.bio || "",
+            followers: [],
+            following: []
+          });
+        }
+      }
+    }
+    const allUsersMap = /* @__PURE__ */ new Map();
+    for (const [handleKey, authUser] of authorsMap.entries()) {
+      allUsersMap.set(handleKey, authUser);
+    }
+    for (const user of Object.values(db.users || {})) {
+      if (user && user.uid) {
+        const u = user;
+        const key = (u.username || u.handle || u.uid).toLowerCase();
+        allUsersMap.set(key, {
+          id: u.uid,
+          name: u.name || "Member",
+          handle: u.username || u.handle || `@user_${u.uid.slice(0, 5)}`,
+          avatar: u.avatar || "",
+          bio: u.bio || "",
+          followers: Array.isArray(u.followers) ? u.followers : [],
+          following: Array.isArray(u.following) ? u.following : []
+        });
+      }
+    }
+    const usersList = Array.from(allUsersMap.values()).filter((u) => {
+      if (!currentUid) return true;
+      if (u.id === currentUid) return false;
+      if (currentUser && (currentUser.username?.toLowerCase() === u.handle.toLowerCase() || currentUser.handle?.toLowerCase() === u.handle.toLowerCase())) {
+        return false;
+      }
+      return true;
+    }).map((u) => {
+      const isFollowing = currentFollowing.includes(u.id) || currentFollowing.includes(u.handle);
+      return {
+        id: u.id,
+        name: u.name,
+        handle: u.handle,
+        avatar: u.avatar,
+        bio: u.bio,
+        followersCount: u.followers.length,
+        followingCount: u.following.length,
+        isFollowing
+      };
+    });
     res.json({ success: true, users: usersList });
+  });
+  app.post("/api/users/follow", (req, res) => {
+    const { currentUid, targetIdOrHandle, currentHandle, currentName, targetName, targetAvatar } = req.body;
+    if (!currentUid || !targetIdOrHandle) {
+      return res.status(400).json({ error: "currentUid and targetIdOrHandle are required" });
+    }
+    const db = readDb();
+    if (!db.users[currentUid]) {
+      db.users[currentUid] = {
+        uid: currentUid,
+        name: currentName || "User",
+        username: currentHandle || `@user_${currentUid.slice(0, 5)}`,
+        followers: [],
+        following: [],
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    if (!Array.isArray(db.users[currentUid].following)) {
+      db.users[currentUid].following = [];
+    }
+    if (!Array.isArray(db.users[currentUid].followers)) {
+      db.users[currentUid].followers = [];
+    }
+    let targetUid = targetIdOrHandle;
+    let targetUser = db.users[targetIdOrHandle];
+    if (!targetUser) {
+      const found = Object.values(db.users).find(
+        (u) => u.username?.toLowerCase() === targetIdOrHandle.toLowerCase() || u.handle?.toLowerCase() === targetIdOrHandle.toLowerCase()
+      );
+      if (found) {
+        targetUser = found;
+        targetUid = found.uid;
+      } else {
+        db.users[targetIdOrHandle] = {
+          uid: targetIdOrHandle,
+          name: targetName || targetIdOrHandle.replace("@", ""),
+          username: targetIdOrHandle.startsWith("@") ? targetIdOrHandle : `@${targetIdOrHandle}`,
+          avatar: targetAvatar || "",
+          followers: [],
+          following: [],
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        targetUser = db.users[targetIdOrHandle];
+        targetUid = targetIdOrHandle;
+      }
+    }
+    if (!Array.isArray(targetUser.followers)) {
+      targetUser.followers = [];
+    }
+    if (!Array.isArray(targetUser.following)) {
+      targetUser.following = [];
+    }
+    const targetHandle = targetUser.username || targetUser.handle || targetIdOrHandle;
+    const currentIdentity = db.users[currentUid].username || currentHandle || currentUid;
+    const isCurrentlyFollowing = db.users[currentUid].following.includes(targetUid) || db.users[currentUid].following.includes(targetHandle);
+    let isFollowing = false;
+    if (isCurrentlyFollowing) {
+      db.users[currentUid].following = db.users[currentUid].following.filter(
+        (id) => id !== targetUid && id !== targetHandle
+      );
+      targetUser.followers = targetUser.followers.filter(
+        (id) => id !== currentUid && id !== currentIdentity && id !== currentHandle
+      );
+      isFollowing = false;
+    } else {
+      db.users[currentUid].following.push(targetUid);
+      if (targetHandle !== targetUid && !db.users[currentUid].following.includes(targetHandle)) {
+        db.users[currentUid].following.push(targetHandle);
+      }
+      if (!targetUser.followers.includes(currentIdentity)) {
+        targetUser.followers.push(currentIdentity);
+      }
+      if (!targetUser.followers.includes(currentUid)) {
+        targetUser.followers.push(currentUid);
+      }
+      isFollowing = true;
+    }
+    writeDb(db);
+    res.json({
+      success: true,
+      isFollowing,
+      targetFollowersCount: targetUser.followers.length,
+      currentFollowingCount: db.users[currentUid].following.length,
+      followingList: db.users[currentUid].following
+    });
+  });
+  app.get("/api/users/:uid/network", (req, res) => {
+    const uid = req.params.uid;
+    const db = readDb();
+    let user = db.users[uid];
+    if (!user) {
+      user = Object.values(db.users).find(
+        (u) => u.username?.toLowerCase() === uid.toLowerCase() || u.handle?.toLowerCase() === uid.toLowerCase()
+      );
+    }
+    if (!user) {
+      return res.json({ success: true, followers: [], following: [] });
+    }
+    const followingKeys = Array.isArray(user.following) ? user.following : [];
+    const followerKeys = Array.isArray(user.followers) ? user.followers : [];
+    const resolveMember = (key) => {
+      const found = db.users[key] || Object.values(db.users).find(
+        (u) => u.username?.toLowerCase() === key.toLowerCase() || u.handle?.toLowerCase() === key.toLowerCase()
+      );
+      if (found) {
+        return {
+          id: found.uid,
+          name: found.name || "Member",
+          handle: found.username || found.handle || `@${key}`,
+          avatar: found.avatar || "",
+          bio: found.bio || ""
+        };
+      }
+      return {
+        id: key,
+        name: key.replace("@", ""),
+        handle: key.startsWith("@") ? key : `@${key}`,
+        avatar: "",
+        bio: ""
+      };
+    };
+    const uniqueFollowing = Array.from(
+      new Map(followingKeys.map(resolveMember).map((u) => [u.handle.toLowerCase(), u])).values()
+    );
+    const uniqueFollowers = Array.from(
+      new Map(followerKeys.map(resolveMember).map((u) => [u.handle.toLowerCase(), u])).values()
+    );
+    res.json({
+      success: true,
+      following: uniqueFollowing,
+      followers: uniqueFollowers
+    });
   });
   app.get("/api/users/:uid", (req, res) => {
     const uid = req.params.uid;
     const db = readDb();
-    const user = db.users[uid];
+    let user = db.users[uid];
+    if (!user) {
+      user = Object.values(db.users).find(
+        (u) => u.username?.toLowerCase() === uid.toLowerCase() || u.handle?.toLowerCase() === uid.toLowerCase()
+      );
+    }
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-    res.json({ success: true, user });
+    const following = Array.isArray(user.following) ? user.following : [];
+    const followers = Array.isArray(user.followers) ? user.followers : [];
+    res.json({
+      success: true,
+      user: {
+        ...user,
+        following,
+        followers,
+        followingCount: following.length,
+        followersCount: followers.length
+      }
+    });
   });
   app.post("/api/users/:uid", (req, res) => {
     const uid = req.params.uid;
     const profileData = req.body;
     const db = readDb();
+    const existing = db.users[uid] || {};
     db.users[uid] = {
-      ...db.users[uid] || {},
+      ...existing,
       ...profileData,
       uid,
+      following: Array.isArray(profileData.following) ? profileData.following : Array.isArray(existing.following) ? existing.following : [],
+      followers: Array.isArray(profileData.followers) ? profileData.followers : Array.isArray(existing.followers) ? existing.followers : [],
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     writeDb(db);
