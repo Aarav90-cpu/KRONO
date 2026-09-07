@@ -17,16 +17,13 @@
     <script>
       window.googletag = window.googletag || { cmd: [] };
       window.googletag.cmd.push(function () {
-        window.googletag.pubads().setPrivacySettings({
-          tagForAgeTreatment: 2
-        });
-      });
-      window.adsbygoogle = window.adsbygoogle || [];
-      window.adsbygoogle.push({
-        params: {
-          tag_for_age_treatment: 2
+        if (window.googletag.pubads) {
+          window.googletag.pubads().setPrivacySettings({
+            tagForAgeTreatment: 2
+          });
         }
       });
+      window.adsbygoogle = window.adsbygoogle || [];
     </script>
     <script
       async
@@ -34,8 +31,8 @@
       crossorigin="anonymous"
       data-tag-for-age-treatment="2"
     ></script>
-    <script type="module" crossorigin src="./assets/index-C--7kNT2.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-C0L9Ec1m.css">
+    <script type="module" crossorigin src="./assets/index-C7s7-k2m.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BeI2q5wq.css">
   </head>
   <body class="bg-background font-sans antialiased text-on-surface">
     <div id="root"></div>
