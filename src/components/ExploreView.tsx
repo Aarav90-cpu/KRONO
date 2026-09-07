@@ -12,6 +12,7 @@ interface ExploreViewProps {
   onOpenAuthModal?: (tab?: 'signin' | 'profile' | 'credentials' | '2fa') => void;
   onToggleFollow?: (user: SuggestedUser) => void;
   onViewPost?: (postId: string) => void;
+  onSelectUserProfile?: (user: SuggestedUser) => void;
 }
 
 export const ExploreView: React.FC<ExploreViewProps> = ({
@@ -23,6 +24,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
   currentUser,
   onOpenAuthModal,
   onToggleFollow,
+  onSelectUserProfile,
 }) => {
   const [search, setSearch] = useState('');
 
@@ -168,22 +170,44 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
                     className="flex items-start justify-between gap-3 pb-3 border-b border-border-glass-dark last:border-b-0 last:pb-0"
                   >
                     <div className="flex items-start gap-2.5 min-w-0">
-                      {user.avatar ? (
-                        <img
-                          src={user.avatar}
-                          alt={user.name}
-                          className="w-9 h-9 rounded-full object-cover shrink-0"
-                        />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-xs font-bold text-outline shrink-0">
-                          {user.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => onSelectUserProfile?.(user)}
+                        className="hover:opacity-80 transition-opacity cursor-pointer shrink-0"
+                      >
+                        {user.avatar ? (
+                          <img
+                            src={user.avatar}
+                            alt={user.name}
+                            className="w-9 h-9 rounded-full object-cover shrink-0 border border-border-glass-dark"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-xs font-bold text-outline shrink-0">
+                            {user.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </button>
                       <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-bold text-on-surface truncate">
-                          {user.name}
-                        </span>
-                        <span className="text-[11px] text-outline truncate">{user.handle}</span>
+                        <button
+                          type="button"
+                          onClick={() => onSelectUserProfile?.(user)}
+                          className="text-left hover:text-primary transition-colors cursor-pointer"
+                        >
+                          <span className="text-xs font-bold text-on-surface hover:text-primary transition-colors truncate block">
+                            {user.name}
+                          </span>
+                        </button>
+                        <div className="flex items-center gap-1.5 text-[11px] text-outline font-mono">
+                          <span className="truncate">{user.handle}</span>
+                          {typeof user.followersCount === 'number' && (
+                            <>
+                              <span>·</span>
+                              <span className="font-sans font-medium text-outline">
+                                {user.followersCount} {user.followersCount === 1 ? 'follower' : 'followers'}
+                              </span>
+                            </>
+                          )}
+                        </div>
                         {user.bio && (
                           <p className="text-[11px] text-on-surface-variant mt-0.5 line-clamp-2 leading-relaxed">
                             {user.bio}

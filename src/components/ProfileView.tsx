@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Post, AuthUserProfile } from '../types';
+import { Post, AuthUserProfile, SuggestedUser } from '../types';
 import {
   Calendar,
   MapPin,
@@ -16,7 +16,10 @@ import {
   Lock,
   KeyRound,
   Eye,
+  UserPlus,
+  UserCheck,
 } from 'lucide-react';
+import { NetworkModal } from './NetworkModal';
 
 interface ProfileViewProps {
   userPosts: Post[];
@@ -26,6 +29,17 @@ interface ProfileViewProps {
   onNotify: (title: string, message: string, type?: 'success' | 'info' | 'warning') => void;
   currentUser: AuthUserProfile | null;
   onOpenAuthModal: (tab?: 'signin' | 'profile' | 'credentials' | '2fa') => void;
+  viewingUser?: SuggestedUser | null;
+  followedHandles?: string[];
+  onToggleFollow?: (user: {
+    id: string;
+    name: string;
+    handle: string;
+    avatar: string;
+    bio?: string;
+    isFollowing?: boolean;
+  }) => void;
+  onUpdateCurrentUser?: (user: AuthUserProfile) => void;
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
@@ -36,21 +50,55 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onNotify,
   currentUser,
   onOpenAuthModal,
+  viewingUser,
+  followedHandles = [],
+  onToggleFollow,
+  onUpdateCurrentUser,
 }) => {
   const [activeTab, setActiveTab] = useState<'posts' | 'media' | 'likes'>('posts');
   const [isEditing, setIsEditing] = useState(false);
   const [bio, setBio] = useState(currentUser?.bio || '');
   const [location, setLocation] = useState(currentUser?.location || '');
   const [website, setWebsite] = useState(currentUser?.website || '');
+  const [isNetworkModalOpen, setIsNetworkModalOpen] = useState(false);
+  const [networkModalTab, setNetworkModalTab] = useState<'following' | 'followers'>('following');
 
-  const displayName = currentUser?.name || 'Guest Explorer';
-  const displayHandle = currentUser?.username || '@guest';
-  const displayLocation = currentUser?.location || location;
-  const displayAvatar = currentUser?.avatar || '';
+  const isViewingSelf =
+    !viewingUser ||
+    Boolean(
+      currentUser &&
+        (viewingUser.id === currentUser.uid ||
+          viewingUser.handle.toLowerCase() === currentUser.username.toLowerCase())
+    );
+
+  const activeUser = isViewingSelf ? currentUser : viewingUser;
+  const displayName = activeUser?.name || (isViewingSelf ? 'Guest Explorer' : 'Community Member');
+  const displayHandle =
+    (activeUser as any)?.username || (activeUser as any)?.handle || '@guest';
+  const displayLocation = (activeUser as any)?.location || location;
+  const displayAvatar = activeUser?.avatar || '';
+
+  const followingCount =
+    (activeUser as any)?.followingCount ?? ((activeUser as any)?.following || []).length;
+  const followersCount =
+    (activeUser as any)?.followersCount ?? ((activeUser as any)?.followers || []).length;
+
+  const isFollowingThisUser = viewingUser
+    ? followedHandles.includes(viewingUser.handle) || followedHandles.includes(viewingUser.id)
+    : false;
 
   const handleSaveBio = (e: React.FormEvent) => {
     e.preventDefault();
     setIsEditing(false);
+    if (currentUser && onUpdateCurrentUser) {
+      const updated: AuthUserProfile = {
+        ...currentUser,
+        bio: bio.trim(),
+        location: location.trim(),
+        website: website.trim(),
+      };
+      onUpdateCurrentUser(updated);
+    }
     onNotify('Profile Updated', 'Your profile changes have been saved.', 'success');
   };
 
@@ -82,14 +130,23 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={() => onOpenAuthModal('profile')}
-          className="px-3 py-1.5 rounded-lg bg-surface-container border border-border-glass-dark hover:bg-surface-container-high text-xs font-semibold text-on-surface transition-colors flex items-center gap-1.5 cursor-pointer"
-        >
-          <Shield className="w-3.5 h-3.5 text-primary" />
-          <span className="hidden sm:inline">Account & Security</span>
-          <span className="sm:hidden">Security</span>
-        </button>
+        {isViewingSelf ? (
+          <button
+            onClick={() => onOpenAuthModal('profile')}
+            className="px-3 py-1.5 rounded-lg bg-surface-container border border-border-glass-dark hover:bg-surface-container-high text-xs font-semibold text-on-surface transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Shield className="w-3.5 h-3.5 text-primary" />
+            <span className="hidden sm:inline">Account & Security</span>
+            <span className="sm:hidden">Security</span>
+          </button>
+        ) : (
+          <button
+            onClick={onBackToFeed}
+            className="px-3 py-1.5 rounded-lg bg-surface-container border border-border-glass-dark hover:bg-surface-container-high text-xs font-semibold text-on-surface transition-colors cursor-pointer"
+          >
+            Back to Feed
+          </button>
+        )}
       </div>
 
       {/* Profile Card */}
@@ -112,42 +169,83 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </div>
             )}
             <div className="flex items-center gap-2">
-              {currentUser ? (
-                <>
-                  <button
-                    onClick={() => onOpenAuthModal('profile')}
-                    className="px-3.5 py-2 rounded-lg border border-border-glass-dark hover:bg-surface-container text-xs font-semibold text-on-surface transition-colors flex items-center gap-1.5 cursor-pointer"
-                    title="Change Name, Username, or Credentials"
-                  >
-                    <Lock className="w-3.5 h-3.5 text-secondary" />
-                    <span>Account Settings</span>
-                  </button>
+              {isViewingSelf ? (
+                currentUser ? (
+                  <>
+                    <button
+                      onClick={() => onOpenAuthModal('profile')}
+                      className="px-3.5 py-2 rounded-lg border border-border-glass-dark hover:bg-surface-container text-xs font-semibold text-on-surface transition-colors flex items-center gap-1.5 cursor-pointer"
+                      title="Change Name, Username, or Credentials"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-secondary" />
+                      <span>Account Settings</span>
+                    </button>
 
+                    <button
+                      onClick={() => setIsEditing(!isEditing)}
+                      className="px-4 py-2 rounded-lg border border-border-glass-dark hover:bg-surface-container text-xs font-semibold text-on-surface transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>{isEditing ? 'Cancel' : 'Edit Bio'}</span>
+                    </button>
+                  </>
+                ) : (
                   <button
-                    onClick={() => setIsEditing(!isEditing)}
-                    className="px-4 py-2 rounded-lg border border-border-glass-dark hover:bg-surface-container text-xs font-semibold text-on-surface transition-colors flex items-center gap-1.5 cursor-pointer"
+                    onClick={() => onOpenAuthModal('signin')}
+                    className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer shadow-sm"
                   >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>{isEditing ? 'Cancel' : 'Edit Bio'}</span>
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Sign In</span>
                   </button>
-                </>
+                )
               ) : (
-                <button
-                  onClick={() => onOpenAuthModal('signin')}
-                  className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer shadow-sm"
-                >
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>Sign In</span>
-                </button>
+                viewingUser && (
+                  <button
+                    onClick={() => {
+                      if (!currentUser) {
+                        onOpenAuthModal('signin');
+                        onNotify('Sign In Required', 'Please sign in to follow members.', 'warning');
+                        return;
+                      }
+                      if (onToggleFollow) {
+                        onToggleFollow({
+                          id: viewingUser.id,
+                          name: viewingUser.name,
+                          handle: viewingUser.handle,
+                          avatar: viewingUser.avatar,
+                          bio: viewingUser.bio,
+                          isFollowing: isFollowingThisUser,
+                        });
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+                      isFollowingThisUser
+                        ? 'border border-border-glass-dark text-outline hover:text-red-400 hover:border-red-400/40 hover:bg-red-500/10'
+                        : 'bg-primary text-white hover:opacity-90 shadow-sm'
+                    }`}
+                  >
+                    {isFollowingThisUser ? (
+                      <>
+                        <UserCheck className="w-3.5 h-3.5" />
+                        <span>Following</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span>Follow</span>
+                      </>
+                    )}
+                  </button>
+                )
               )}
             </div>
           </div>
 
-          {!currentUser && (
+          {!currentUser && isViewingSelf && (
             <div className="p-3.5 rounded-xl bg-surface-container border border-border-glass-dark flex items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2 text-outline">
                 <Eye className="w-4 h-4 text-primary shrink-0" />
-                <span>You are browsing as a guest. Sign in to post, like, comment, and create your profile.</span>
+                <span>You are browsing as a guest. Sign in to post, like, comment, and follow members.</span>
               </div>
               <button
                 onClick={() => onOpenAuthModal('signin')}
@@ -158,7 +256,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
           )}
 
-          {isEditing ? (
+          {isEditing && isViewingSelf ? (
             <form onSubmit={handleSaveBio} className="flex flex-col gap-3 p-4 rounded-xl bg-surface-container-low border border-border-glass-dark">
               <div>
                 <label className="text-xs text-outline block mb-1">Bio</label>
@@ -194,13 +292,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}
-                  className="px-3 py-1.5 text-xs text-outline hover:text-on-surface"
+                  className="px-3 py-1.5 text-xs text-outline hover:text-on-surface cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-primary-container text-white text-xs font-semibold rounded-lg hover:opacity-90"
+                  className="px-4 py-1.5 bg-primary-container text-white text-xs font-semibold rounded-lg hover:opacity-90 cursor-pointer"
                 >
                   Save Changes
                 </button>
@@ -211,13 +309,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-lg font-bold text-on-surface">{displayName}</h2>
-                  {currentUser ? (
-                    <>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold border border-emerald-500/20">
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>Verified Member</span>
-                      </span>
-                    </>
+                  {currentUser || !isViewingSelf ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold border border-emerald-500/20">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Verified Member</span>
+                    </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container text-outline text-[11px] font-medium border border-border-glass-dark">
                       Guest View
@@ -227,9 +323,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <span className="text-xs text-outline font-mono">{displayHandle}</span>
               </div>
 
-              {bio ? (
+              {((isViewingSelf ? currentUser?.bio || bio : viewingUser?.bio)) ? (
                 <p className="text-xs sm:text-sm text-on-surface leading-relaxed mt-1">
-                  {bio}
+                  {isViewingSelf ? currentUser?.bio || bio : viewingUser?.bio}
                 </p>
               ) : (
                 <p className="text-xs text-outline italic mt-1">
@@ -259,16 +355,34 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </div>
               </div>
 
-              {/* Follower Stats */}
+              {/* Real Follower Stats */}
               <div className="flex items-center gap-4 text-xs pt-2">
-                <div className="flex items-center gap-1">
-                  <span className="font-bold text-on-surface">342</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNetworkModalTab('following');
+                    setIsNetworkModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 hover:text-primary transition-colors cursor-pointer group"
+                >
+                  <span className="font-bold text-on-surface group-hover:text-primary transition-colors">
+                    {followingCount}
+                  </span>
                   <span className="text-outline">Following</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-bold text-on-surface">1.8K</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNetworkModalTab('followers');
+                    setIsNetworkModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 hover:text-primary transition-colors cursor-pointer group"
+                >
+                  <span className="font-bold text-on-surface group-hover:text-primary transition-colors">
+                    {followersCount}
+                  </span>
                   <span className="text-outline">Followers</span>
-                </div>
+                </button>
               </div>
             </div>
           )}
@@ -284,7 +398,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 : 'border-transparent text-outline hover:text-on-surface'
             }`}
           >
-            Posts ({userPosts.length})
+            Posts ({displayedPosts.length})
           </button>
           <button
             onClick={() => setActiveTab('media')}
@@ -304,10 +418,23 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 : 'border-transparent text-outline hover:text-on-surface'
             }`}
           >
-            Likes
+            Liked
           </button>
         </div>
       </div>
+
+      {/* Network Modal (Following & Followers) */}
+      <NetworkModal
+        isOpen={isNetworkModalOpen}
+        onClose={() => setIsNetworkModalOpen(false)}
+        initialTab={networkModalTab}
+        targetUid={(activeUser as any)?.uid || (activeUser as any)?.id || displayHandle}
+        targetName={displayName}
+        currentUser={currentUser}
+        followedHandles={followedHandles}
+        onToggleFollow={onToggleFollow || (() => {})}
+        onOpenAuthModal={onOpenAuthModal}
+      />
 
       {/* Posts list */}
       <div className="flex flex-col gap-4">

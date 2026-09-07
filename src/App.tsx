@@ -11,6 +11,8 @@ import {
   fetchTrendingFromBackend,
   fetchSuggestedUsersFromBackend,
   saveUserProfileToBackend,
+  fetchUserProfileFromBackend,
+  toggleFollowOnBackend,
 } from './services/api';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -61,6 +63,7 @@ export default function App() {
   const [trending, setTrending] = useState<TrendingTopic[]>([]);
   const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
   const [followedHandles, setFollowedHandles] = useState<string[]>([]);
+  const [viewingProfileUser, setViewingProfileUser] = useState<SuggestedUser | null>(null);
 
   // New Post Modal
   const [isCastModalOpen, setIsCastModalOpen] = useState(false);
@@ -98,7 +101,7 @@ export default function App() {
 
   // Listen to Firebase Auth state
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
           const stored = localStorage.getItem(`krono_profile_${firebaseUser.uid}`);
@@ -124,7 +127,15 @@ export default function App() {
               createdAt: new Date().toISOString(),
             };
           }
+          // Fetch latest backend profile to sync followers, following, and custom details
+          const backendProfile = await fetchUserProfileFromBackend(firebaseUser.uid);
+          if (backendProfile) {
+            profile = { ...profile, ...backendProfile };
+          }
           setCurrentUser(profile);
+          if (Array.isArray(profile.following)) {
+            setFollowedHandles(profile.following);
+          }
           localStorage.setItem('krono_active_uid', firebaseUser.uid);
           localStorage.setItem(`krono_profile_${firebaseUser.uid}`, JSON.stringify(profile));
           saveUserProfileToBackend(profile);
@@ -250,23 +261,82 @@ export default function App() {
     }
   };
 
-  const handleToggleFollow = (user: SuggestedUser) => {
-    setSuggestedUsers((prev) =>
-      prev.map((u) => (u.id === user.id ? { ...u, isFollowing: !u.isFollowing } : u))
+  const handleToggleFollow = async (user: SuggestedUser) => {
+    if (!currentUser) {
+      setAuthModalInitialTab('signin');
+      setIsAuthModalOpen(true);
+      addToast('Sign In Required', 'Please sign in to follow community members.', 'warning');
+      return;
+    }
+
+    const wasFollowing =
+      followedHandles.includes(user.handle) || followedHandles.includes(user.id);
+    const nextFollowing = !wasFollowing;
+
+    // Optimistic UI updates
+    setFollowedHandles((prev) =>
+      nextFollowing
+        ? [...prev, user.handle, user.id]
+        : prev.filter((h) => h !== user.handle && h !== user.id)
     );
-    setFollowedHandles((prev) => {
-      const isFollowing = prev.includes(user.handle);
-      addToast(
-        isFollowing ? 'Unfollowed' : 'Followed',
-        isFollowing
-          ? `You unfollowed ${user.name}`
-          : `You are now following ${user.name}`,
-        'info'
-      );
-      return isFollowing
-        ? prev.filter((h) => h !== user.handle)
-        : [...prev, user.handle];
+
+    setSuggestedUsers((prev) =>
+      prev.map((u) =>
+        u.id === user.id || u.handle.toLowerCase() === user.handle.toLowerCase()
+          ? {
+              ...u,
+              isFollowing: nextFollowing,
+              followersCount: Math.max(0, (u.followersCount || 0) + (nextFollowing ? 1 : -1)),
+            }
+          : u
+      )
+    );
+
+    setCurrentUser((prev) => {
+      if (!prev) return prev;
+      const curFollowing = Array.isArray(prev.following) ? prev.following : [];
+      const updated = nextFollowing
+        ? [...curFollowing.filter((h) => h !== user.handle && h !== user.id), user.handle]
+        : curFollowing.filter((h) => h !== user.handle && h !== user.id);
+      return {
+        ...prev,
+        following: updated,
+        followingCount: updated.length,
+      };
     });
+
+    addToast(
+      nextFollowing ? 'Followed' : 'Unfollowed',
+      nextFollowing ? `You are now following ${user.name}` : `You unfollowed ${user.name}`,
+      'info'
+    );
+
+    // Call real backend endpoint
+    const res = await toggleFollowOnBackend(
+      currentUser.uid,
+      user.id || user.handle,
+      currentUser.username,
+      currentUser.name,
+      user.name,
+      user.avatar
+    );
+
+    if (res && res.success) {
+      setCurrentUser((prev) => {
+        if (!prev) return prev;
+        const updated = {
+          ...prev,
+          following: res.followingList,
+          followingCount: res.currentFollowingCount,
+        };
+        localStorage.setItem(`krono_profile_${prev.uid}`, JSON.stringify(updated));
+        return updated;
+      });
+      // Synchronize suggested users
+      fetchSuggestedUsersFromBackend(currentUser.uid).then((users) => {
+        if (users && users.length > 0) setSuggestedUsers(users);
+      });
+    }
   };
 
   const handleToggleLike = async (postId: string) => {
@@ -374,12 +444,19 @@ export default function App() {
     (p) => p.author.handle === activeUserHandle || p.author.handle === '@aarav'
   );
 
+  const handleViewChange = (view: ViewMode) => {
+    if (view === 'profile') {
+      setViewingProfileUser(null);
+    }
+    setCurrentView(view);
+  };
+
   return (
     <div className="min-h-screen bg-background text-on-surface flex flex-col font-sans transition-colors duration-300 antialiased selection:bg-primary/20 selection:text-primary">
       {/* Navigation Header */}
       <Header
         currentView={currentView}
-        onViewChange={setCurrentView}
+        onViewChange={handleViewChange}
         isDark={isDark}
         onToggleTheme={handleToggleTheme}
         onOpenCreatePostModal={() => setIsCastModalOpen(true)}
@@ -400,7 +477,7 @@ export default function App() {
           <div className="sticky top-20">
             <Sidebar
               currentView={currentView}
-              onViewChange={setCurrentView}
+              onViewChange={handleViewChange}
               feedFilter={feedFilter}
               onFeedFilterChange={setFeedFilter}
               trending={trending}
@@ -441,6 +518,10 @@ export default function App() {
               suggestedUsers={suggestedUsers}
               followedHandles={followedHandles}
               onToggleFollow={handleToggleFollow}
+              onSelectUserProfile={(user) => {
+                setViewingProfileUser(user);
+                setCurrentView('profile');
+              }}
             />
           )}
 
@@ -461,6 +542,10 @@ export default function App() {
                 setIsAuthModalOpen(true);
               }}
               onToggleFollow={handleToggleFollow}
+              onSelectUserProfile={(user) => {
+                setViewingProfileUser(user);
+                setCurrentView('profile');
+              }}
             />
           )}
 
@@ -475,12 +560,31 @@ export default function App() {
 
           {currentView === 'profile' && (
             <ProfileView
-              userPosts={userPosts}
+              userPosts={
+                viewingProfileUser
+                  ? posts.filter(
+                      (p) =>
+                        p.author.handle.toLowerCase() === viewingProfileUser.handle.toLowerCase() ||
+                        (viewingProfileUser.id && p.author.id === viewingProfileUser.id)
+                    )
+                  : userPosts
+              }
               onToggleLike={handleToggleLike}
               onToggleBookmark={handleToggleBookmark}
-              onBackToFeed={() => setCurrentView('feed')}
+              onBackToFeed={() => {
+                setViewingProfileUser(null);
+                setCurrentView('feed');
+              }}
               onNotify={addToast}
               currentUser={currentUser}
+              viewingUser={viewingProfileUser}
+              followedHandles={followedHandles}
+              onToggleFollow={handleToggleFollow}
+              onUpdateCurrentUser={(updated) => {
+                setCurrentUser(updated);
+                saveUserProfileToBackend(updated);
+                localStorage.setItem(`krono_profile_${updated.uid}`, JSON.stringify(updated));
+              }}
               onOpenAuthModal={(tab) => {
                 setAuthModalInitialTab(tab || 'profile');
                 setIsAuthModalOpen(true);

@@ -141,3 +141,68 @@ export async function saveUserProfileToBackend(profile: AuthUserProfile): Promis
     console.warn('Failed to save profile to backend:', err);
   }
 }
+
+export async function fetchUserProfileFromBackend(uid: string): Promise<AuthUserProfile | null> {
+  try {
+    const res = await fetch(`/api/users/${encodeURIComponent(uid)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.user || null;
+  } catch (err) {
+    console.warn('Failed to fetch user profile from backend:', err);
+    return null;
+  }
+}
+
+export async function toggleFollowOnBackend(
+  currentUid: string,
+  targetIdOrHandle: string,
+  currentHandle?: string,
+  currentName?: string,
+  targetName?: string,
+  targetAvatar?: string
+): Promise<{
+  success: boolean;
+  isFollowing: boolean;
+  targetFollowersCount: number;
+  currentFollowingCount: number;
+  followingList: string[];
+} | null> {
+  try {
+    const res = await fetch('/api/users/follow', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        currentUid,
+        targetIdOrHandle,
+        currentHandle,
+        currentName,
+        targetName,
+        targetAvatar,
+      }),
+    });
+    if (!res.ok) throw new Error(`Follow request failed: ${res.statusText}`);
+    return await res.json();
+  } catch (err) {
+    console.error('Error in toggleFollowOnBackend:', err);
+    return null;
+  }
+}
+
+export async function fetchUserNetworkFromBackend(uid: string): Promise<{
+  following: Array<{ id: string; name: string; handle: string; avatar: string; bio?: string }>;
+  followers: Array<{ id: string; name: string; handle: string; avatar: string; bio?: string }>;
+}> {
+  try {
+    const res = await fetch(`/api/users/${encodeURIComponent(uid)}/network`);
+    if (!res.ok) return { following: [], followers: [] };
+    const data = await res.json();
+    return {
+      following: data.following || [],
+      followers: data.followers || [],
+    };
+  } catch (err) {
+    console.warn('Failed to fetch user network:', err);
+    return { following: [], followers: [] };
+  }
+}

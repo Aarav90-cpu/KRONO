@@ -18,6 +18,7 @@ export interface PostComment {
 export interface Post {
   id: string;
   author: {
+    id?: string;
     name: string;
     handle: string;
     avatar: string;
@@ -51,6 +52,8 @@ export interface SuggestedUser {
   avatar: string;
   bio: string;
   isFollowing?: boolean;
+  followersCount?: number;
+  followingCount?: number;
 }
 
 export type TwoFactorMethod = 'totp' | 'phone';
@@ -75,5 +78,9 @@ export interface AuthUserProfile {
   location?: string;
   bio?: string;
   website?: string;
+  following?: string[];
+  followers?: string[];
+  followingCount?: number;
+  followersCount?: number;
 }
 

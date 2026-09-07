@@ -37,6 +37,7 @@ interface FeedViewProps {
   suggestedUsers?: SuggestedUser[];
   followedHandles?: string[];
   onToggleFollow?: (user: SuggestedUser) => void;
+  onSelectUserProfile?: (user: SuggestedUser) => void;
 }
 
 export const FeedView: React.FC<FeedViewProps> = ({
@@ -58,6 +59,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
   suggestedUsers = [],
   followedHandles = [],
   onToggleFollow,
+  onSelectUserProfile,
 }) => {
   const [composerText, setComposerText] = useState('');
   const [composerMediaUrl, setComposerMediaUrl] = useState('');
@@ -119,7 +121,10 @@ export const FeedView: React.FC<FeedViewProps> = ({
 
     if (feedFilter === 'following') {
       if (!followedHandles || followedHandles.length === 0) return false;
-      return followedHandles.includes(p.author.handle);
+      return (
+        followedHandles.includes(p.author.handle) ||
+        (p.author.id ? followedHandles.includes(p.author.id) : false)
+      );
     }
 
     if (feedFilter === 'media') {
@@ -329,26 +334,40 @@ export const FeedView: React.FC<FeedViewProps> = ({
                 >
                   {/* Author Header */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onSelectUserProfile) {
+                          onSelectUserProfile({
+                            id: post.author.id || post.author.handle,
+                            name: post.author.name,
+                            handle: post.author.handle,
+                            avatar: post.author.avatar,
+                            bio: post.author.bio || '',
+                          });
+                        }
+                      }}
+                      className="flex items-center gap-2.5 text-left hover:opacity-80 transition-opacity cursor-pointer group"
+                    >
                       <img
                         src={post.author.avatar}
                         alt={post.author.name}
-                        className="w-10 h-10 rounded-full object-cover shrink-0"
+                        className="w-10 h-10 rounded-full object-cover shrink-0 border border-border-glass-dark"
                       />
                       <div className="flex flex-col">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-semibold text-on-surface">
+                          <span className="text-sm font-semibold text-on-surface group-hover:text-primary transition-colors">
                             {post.author.name}
                           </span>
                           {post.author.verified && (
                             <CheckCircle className="w-3.5 h-3.5 text-primary fill-primary/20" />
                           )}
                         </div>
-                        <span className="text-xs text-outline">
+                        <span className="text-xs text-outline font-mono">
                           {post.author.handle} · {post.timestamp}
                         </span>
                       </div>
-                    </div>
+                    </button>
 
                     <button
                       onClick={() => onToggleBookmark(post.id)}
