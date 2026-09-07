@@ -7,7 +7,7 @@ interface ExploreViewProps {
   onNotify: (title: string, message: string, type?: 'success' | 'info' | 'warning') => void;
   onSelectTag?: (tag: string) => void;
   currentUser?: AuthUserProfile | null;
-  onOpenAuthModal?: (tab?: 'signin' | 'profile' | 'credentials' | '2fa' | 'setup-guide') => void;
+  onOpenAuthModal?: (tab?: 'signin' | 'profile' | 'credentials' | '2fa') => void;
 }
 
 export const ExploreView: React.FC<ExploreViewProps> = ({

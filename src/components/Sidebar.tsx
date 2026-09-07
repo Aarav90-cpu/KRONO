@@ -154,8 +154,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Clean Open Source Note */}
       <div className="px-3 text-[11px] text-outline leading-relaxed">
-        <p>© 2026 KRONO</p>
-        <p className="mt-0.5">An open-source, decentralized social network built for community.</p>
+        <p>An open-source, decentralized social network built for community.</p>
       </div>
     </aside>
   );

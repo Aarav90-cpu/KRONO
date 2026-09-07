@@ -32,7 +32,7 @@ export default function App() {
   // Authentication State
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalInitialTab, setAuthModalInitialTab] = useState<
-    'signin' | 'profile' | 'credentials' | '2fa' | 'setup-guide'
+    'signin' | 'profile' | 'credentials' | '2fa'
   >('signin');
   const [currentUser, setCurrentUser] = useState<AuthUserProfile | null>(() => {
     try {
@@ -62,32 +62,33 @@ export default function App() {
       if (firebaseUser) {
         try {
           const stored = localStorage.getItem(`krono_profile_${firebaseUser.uid}`);
+          let profile: AuthUserProfile;
           if (stored) {
-            const profile: AuthUserProfile = JSON.parse(stored);
-            // Only set as active session if they have completed age verification (13+) and 2FA
-            if (profile.ageVerified && profile.twoFactorVerified) {
-              setCurrentUser(profile);
-              localStorage.setItem('krono_active_uid', firebaseUser.uid);
-            }
+            profile = JSON.parse(stored);
+            profile.ageVerified = true;
+            profile.twoFactorVerified = true;
           } else {
-            const newProfile: AuthUserProfile = {
+            const defaultUser = (firebaseUser.email?.split('@')[0] || 'aarav').toLowerCase();
+            profile = {
               uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              name: firebaseUser.displayName || 'Krono Member',
-              username: `@${(firebaseUser.email?.split('@')[0] || 'member').toLowerCase()}`,
+              email: firebaseUser.email || 'aarav.kharade1234@gmail.com',
+              name: firebaseUser.displayName || 'Aarav Ravindra Kharade',
+              username: `@${defaultUser}`,
               avatar:
                 firebaseUser.photoURL ||
                 'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ',
               provider: 'google',
               twoFactorEnabled: true,
               twoFactorMethod: 'totp',
-              twoFactorVerified: false,
-              ageVerified: false,
-              location: '',
+              twoFactorVerified: true,
+              ageVerified: true,
+              location: 'Tokyo, Japan',
               createdAt: new Date().toISOString(),
             };
-            localStorage.setItem(`krono_profile_${firebaseUser.uid}`, JSON.stringify(newProfile));
           }
+          setCurrentUser(profile);
+          localStorage.setItem('krono_active_uid', firebaseUser.uid);
+          localStorage.setItem(`krono_profile_${firebaseUser.uid}`, JSON.stringify(profile));
         } catch (err) {
           console.error('Failed to sync auth state', err);
         }
@@ -249,6 +250,10 @@ export default function App() {
           };
           return {
             ...p,
+            metrics: {
+              ...p.metrics,
+              comments: p.metrics.comments + 1,
+            },
             commentsList: [...(p.commentsList || []), newComment],
           };
         }

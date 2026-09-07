@@ -27,7 +27,7 @@ interface HeaderProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   currentUser: AuthUserProfile | null;
-  onOpenAuthModal: (tab?: 'signin' | 'profile' | 'credentials' | '2fa' | 'setup-guide') => void;
+  onOpenAuthModal: (tab?: 'signin' | 'profile' | 'credentials' | '2fa') => void;
   onSignOut: () => void;
 }
 

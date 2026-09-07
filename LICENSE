@@ -1,0 +1,31 @@
+# KRONO SOFTWARE LICENSE
+
+Copyright (c) 2026 Aarav Ravindra Kharade. All Rights Reserved.
+
+### 1. Ownership and Exclusive Rights
+This project and all its associated intellectual property, source code, design systems, assets, and documentation are solely under the name and ownership of **AARAV RAVINDRA KHARADE**.
+
+### 2. Copying and Advertising Restrictions
+No one has permission to advertise, replicate, monetize, or copy this project or any part thereof without prior written permission from the owner (**Aarav Ravindra Kharade**).
+
+### 3. Contribution Guidelines and Code Attribution
+All contributors must strictly adhere to the following attribution protocols:
+- **New Files**: Any newly created file must include the following attribution comment at the top:
+  `// <YOUR NAME> <YEAR>`
+- **Modifications / Edits**: If an existing file or portion of code is modified, the contributor must mark the edited section with:
+  `// <YOUR NAME> <YEAR>`
+  ... edited code ...
+  `// End of contribution!`
+- **Commit Messages**: All git commit messages must explicitly state the contributor's full Name, the Year, the Month, and the Day (e.g., `[Aarav Ravindra Kharade - 2026-09-07] Feature update`).
+
+### 4. Policy on Forks and Derivatives
+- **Zero Support**: All forks and downstream distributions will receive **0 support** from the original author and are deemed completely **unofficial**.
+- **Copyright Protection & Trademark Enforcement**: If forks copy the content, name, trademarks, branding, or features—either verbatim ("as is") or in the same manner under slight variations—they are strictly subject to copyright infringement claims and legal action.
+- **Mandatory Attribution**: All forks must give prominent credit to the creator (**Aarav Ravindra Kharade**) and clearly mention the original work.
+- **Unmodified CREDITS.md**: All forks MUST retain and contain the `CREDITS.md` file at the root of the main project directory exactly as is, without modification, deletion, or omission.
+
+---
+SOLE OWNER & CREATOR:
+Aarav Ravindra Kharade
+Project: KRONO
+Year: 2026

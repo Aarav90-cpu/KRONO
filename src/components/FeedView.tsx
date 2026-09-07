@@ -33,7 +33,7 @@ interface FeedViewProps {
   onToggleLike: (postId: string) => void;
   onAddComment: (postId: string, commentText: string) => void;
   currentUser?: AuthUserProfile | null;
-  onOpenAuthModal?: (tab?: 'signin' | 'profile' | 'credentials' | '2fa' | 'setup-guide') => void;
+  onOpenAuthModal?: (tab?: 'signin' | 'profile' | 'credentials' | '2fa') => void;
 }
 
 export const FeedView: React.FC<FeedViewProps> = ({
@@ -92,6 +92,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
 
     onAddComment(postId, text);
     setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
+    setExpandedComments((prev) => ({ ...prev, [postId]: true }));
     onNotify('Comment Added', 'Your reply has been posted.', 'success');
   };
 
@@ -420,6 +421,24 @@ export const FeedView: React.FC<FeedViewProps> = ({
                     >
                       <Share2 className="w-4 h-4" />
                       <span>{post.metrics.shares}</span>
+                    </button>
+
+                    {/* Bookmark Button */}
+                    <button
+                      onClick={() => onToggleBookmark(post.id)}
+                      className={`flex items-center gap-1.5 transition-colors cursor-pointer py-1 px-2 rounded-lg ${
+                        post.metrics.isBookmarked
+                          ? 'text-primary bg-primary/10 font-semibold'
+                          : 'hover:text-primary hover:bg-primary/10'
+                      }`}
+                      title={post.metrics.isBookmarked ? 'Remove from Bookmarks' : 'Add to Bookmarks'}
+                    >
+                      <Bookmark
+                        className={`w-4 h-4 ${
+                          post.metrics.isBookmarked ? 'fill-primary text-primary' : ''
+                        }`}
+                      />
+                      <span>{post.metrics.isBookmarked ? 'Saved' : 'Bookmark'}</span>
                     </button>
                   </div>
 

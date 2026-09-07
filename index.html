@@ -17,16 +17,13 @@
     <script>
       window.googletag = window.googletag || { cmd: [] };
       window.googletag.cmd.push(function () {
-        window.googletag.pubads().setPrivacySettings({
-          tagForAgeTreatment: 2
-        });
-      });
-      window.adsbygoogle = window.adsbygoogle || [];
-      window.adsbygoogle.push({
-        params: {
-          tag_for_age_treatment: 2
+        if (window.googletag.pubads) {
+          window.googletag.pubads().setPrivacySettings({
+            tagForAgeTreatment: 2
+          });
         }
       });
+      window.adsbygoogle = window.adsbygoogle || [];
     </script>
     <script
       async

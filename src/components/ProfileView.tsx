@@ -25,7 +25,7 @@ interface ProfileViewProps {
   onBackToFeed: () => void;
   onNotify: (title: string, message: string, type?: 'success' | 'info' | 'warning') => void;
   currentUser: AuthUserProfile | null;
-  onOpenAuthModal: (tab?: 'signin' | 'profile' | 'credentials' | '2fa' | 'setup-guide') => void;
+  onOpenAuthModal: (tab?: 'signin' | 'profile' | 'credentials' | '2fa') => void;
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
