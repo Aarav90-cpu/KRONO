@@ -1,50 +1,65 @@
 import React, { useState } from 'react';
-import { X, Image, Hash, Send, Sparkles } from 'lucide-react';
-import { Post } from '../types';
+import { X, Image, Hash, Send } from 'lucide-react';
+import { Post, AuthUserProfile } from '../types';
 
 interface CastModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmitPost: (post: Partial<Post>) => void;
+  currentUser?: AuthUserProfile | null;
 }
 
 export const CastModal: React.FC<CastModalProps> = ({
   isOpen,
   onClose,
   onSubmitPost,
+  currentUser,
 }) => {
   const [content, setContent] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
   const [showMediaInput, setShowMediaInput] = useState(false);
-  const [tags, setTags] = useState<string[]>(['#OpenSource']);
+  const [tagInput, setTagInput] = useState('');
+  const [customTags, setCustomTags] = useState<string[]>([]);
 
   if (!isOpen) return null;
 
-  const popularTags = ['#OpenSource', '#WebDev', '#Design', '#Tech', '#Community'];
-
-  const toggleTag = (tag: string) => {
-    if (tags.includes(tag)) {
-      setTags(tags.filter((t) => t !== tag));
-    } else {
-      setTags([...tags, tag]);
+  const handleAddTag = () => {
+    let clean = tagInput.trim();
+    if (!clean) return;
+    if (!clean.startsWith('#')) clean = `#${clean}`;
+    if (!customTags.includes(clean)) {
+      setCustomTags([...customTags, clean]);
     }
+    setTagInput('');
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setCustomTags(customTags.filter((t) => t !== tagToRemove));
   };
 
   const handlePublish = (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
 
+    // Extract hashtags dynamically from text
+    const textTags = content.match(/#([a-zA-Z0-9_\u0080-\uFFFF]+)/g) || [];
+    const allTags = Array.from(new Set([...customTags, ...textTags]));
+
     onSubmitPost({
       content: content.trim(),
       mediaUrl: mediaUrl.trim() || undefined,
-      tags: tags.length > 0 ? tags : undefined,
+      tags: allTags.length > 0 ? allTags : undefined,
     });
 
     setContent('');
     setMediaUrl('');
     setShowMediaInput(false);
+    setCustomTags([]);
     onClose();
   };
+
+  const displayName = currentUser?.name || 'You';
+  const displayAvatar = currentUser?.avatar || '';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
@@ -63,18 +78,24 @@ export const CastModal: React.FC<CastModalProps> = ({
         {/* Composer */}
         <form onSubmit={handlePublish} className="flex flex-col gap-3">
           <div className="flex gap-3">
-            <img
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ"
-              alt="You"
-              className="w-10 h-10 rounded-full object-cover shrink-0"
-            />
+            {displayAvatar ? (
+              <img
+                src={displayAvatar}
+                alt={displayName}
+                className="w-10 h-10 rounded-full object-cover shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center font-bold text-sm text-outline shrink-0">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+            )}
             <div className="flex-1">
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 rows={4}
                 autoFocus
-                placeholder="What's happening? Share thoughts, questions, or updates..."
+                placeholder="What's happening? Share thoughts, updates, or links..."
                 className="w-full bg-transparent border-0 text-sm text-on-surface placeholder:text-outline focus:outline-none resize-none"
               />
             </div>
@@ -88,7 +109,7 @@ export const CastModal: React.FC<CastModalProps> = ({
                 type="url"
                 value={mediaUrl}
                 onChange={(e) => setMediaUrl(e.target.value)}
-                placeholder="https://images.unsplash.com/..."
+                placeholder="https://example.com/image.jpg"
                 className="w-full p-2 text-xs rounded-lg bg-surface border border-border-glass-dark text-on-surface focus:outline-none focus:border-primary"
               />
               {mediaUrl && (
@@ -106,26 +127,47 @@ export const CastModal: React.FC<CastModalProps> = ({
             </div>
           )}
 
-          {/* Tag selector */}
-          <div className="flex items-center gap-1.5 flex-wrap pt-1">
-            <span className="text-xs text-outline mr-1">Tags:</span>
-            {popularTags.map((tag) => {
-              const isSelected = tags.includes(tag);
-              return (
+          {/* Optional custom tags */}
+          <div className="flex items-center gap-2 flex-wrap pt-1">
+            {customTags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/15 text-primary border border-primary/30"
+              >
+                <span>{tag}</span>
                 <button
                   type="button"
-                  key={tag}
-                  onClick={() => toggleTag(tag)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                    isSelected
-                      ? 'bg-primary/20 text-primary border border-primary/30'
-                      : 'bg-surface-container text-outline hover:text-on-surface'
-                  }`}
+                  onClick={() => handleRemoveTag(tag)}
+                  className="hover:opacity-75 cursor-pointer ml-0.5"
                 >
-                  {tag}
+                  ×
                 </button>
-              );
-            })}
+              </span>
+            ))}
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddTag();
+                  }
+                }}
+                placeholder="Add #hashtag (optional)"
+                className="px-2.5 py-1 text-xs rounded-full bg-surface-container border border-border-glass-dark text-on-surface placeholder:text-outline focus:outline-none focus:border-primary/50"
+              />
+              {tagInput.trim() && (
+                <button
+                  type="button"
+                  onClick={handleAddTag}
+                  className="text-xs text-primary font-semibold px-1.5 py-0.5 rounded hover:bg-surface-container cursor-pointer"
+                >
+                  + Add
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Bottom Bar */}
@@ -137,16 +179,13 @@ export const CastModal: React.FC<CastModalProps> = ({
                 className={`p-2 rounded-lg transition-colors cursor-pointer ${
                   showMediaInput ? 'bg-primary/20 text-primary' : 'text-outline hover:text-on-surface hover:bg-surface-container'
                 }`}
-                title="Attach photo/media"
+                title="Attach image URL"
               >
                 <Image className="w-4 h-4" />
               </button>
             </div>
 
             <div className="flex items-center gap-3">
-              <span className="text-xs text-outline">
-                {280 - content.length} left
-              </span>
               <button
                 type="submit"
                 disabled={!content.trim()}

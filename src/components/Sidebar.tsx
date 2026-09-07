@@ -10,7 +10,6 @@ import {
   Hash,
   Sparkles,
 } from 'lucide-react';
-import { TRENDING_TOPICS } from '../data/mockData';
 
 interface SidebarProps {
   currentView: ViewMode;
@@ -18,6 +17,7 @@ interface SidebarProps {
   feedFilter: FeedFilter;
   onFeedFilterChange: (filter: FeedFilter) => void;
   onSelectTag?: (tag: string) => void;
+  trending?: TrendingTopic[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -26,7 +26,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   feedFilter,
   onFeedFilterChange,
   onSelectTag,
+  trending = [],
 }) => {
+  const topicsToDisplay = trending;
   return (
     <aside className="w-60 shrink-0 flex flex-col gap-6 select-none">
       {/* Primary Feeds */}
@@ -131,24 +133,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="flex flex-col gap-2 text-xs">
-          {TRENDING_TOPICS.slice(0, 4).map((topic) => (
-            <button
-              key={topic.tag}
-              onClick={() => {
-                if (onSelectTag) {
-                  onSelectTag(topic.tag);
-                } else {
-                  onViewChange('explore');
-                }
-              }}
-              className="flex flex-col text-left group cursor-pointer"
-            >
-              <span className="text-on-surface font-semibold group-hover:text-primary transition-colors">
-                {topic.tag}
-              </span>
-              <span className="text-[10px] text-outline">{topic.postsCount}</span>
-            </button>
-          ))}
+          {topicsToDisplay.length === 0 ? (
+            <span className="text-[11px] text-outline italic py-1">
+              No trending hashtags yet
+            </span>
+          ) : (
+            topicsToDisplay.slice(0, 5).map((topic) => (
+              <button
+                key={topic.tag}
+                onClick={() => {
+                  if (onSelectTag) {
+                    onSelectTag(topic.tag);
+                  } else {
+                    onViewChange('explore');
+                  }
+                }}
+                className="flex flex-col text-left group cursor-pointer"
+              >
+                <span className="text-on-surface font-semibold group-hover:text-primary transition-colors">
+                  {topic.tag}
+                </span>
+                <span className="text-[10px] text-outline">{topic.postsCount}</span>
+              </button>
+            ))
+          )}
         </div>
       </div>
 

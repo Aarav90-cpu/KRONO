@@ -73,5 +73,7 @@ export interface AuthUserProfile {
   age?: number;
   ageVerified: boolean;
   location?: string;
+  bio?: string;
+  website?: string;
 }
 

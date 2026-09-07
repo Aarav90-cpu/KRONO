@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FeedSubMode, FeedFilter, Post, PostComment, AuthUserProfile } from '../types';
+import { FeedSubMode, FeedFilter, Post, PostComment, AuthUserProfile, TrendingTopic, SuggestedUser } from '../types';
 import {
   Clock,
   Flame,
@@ -17,7 +17,6 @@ import {
   Eye,
   ShieldCheck,
 } from 'lucide-react';
-import { TRENDING_TOPICS, SUGGESTED_USERS } from '../data/mockData';
 
 interface FeedViewProps {
   posts: Post[];
@@ -34,6 +33,10 @@ interface FeedViewProps {
   onAddComment: (postId: string, commentText: string) => void;
   currentUser?: AuthUserProfile | null;
   onOpenAuthModal?: (tab?: 'signin' | 'profile' | 'credentials' | '2fa') => void;
+  trending?: TrendingTopic[];
+  suggestedUsers?: SuggestedUser[];
+  followedHandles?: string[];
+  onToggleFollow?: (user: SuggestedUser) => void;
 }
 
 export const FeedView: React.FC<FeedViewProps> = ({
@@ -51,6 +54,10 @@ export const FeedView: React.FC<FeedViewProps> = ({
   onAddComment,
   currentUser,
   onOpenAuthModal,
+  trending = [],
+  suggestedUsers = [],
+  followedHandles = [],
+  onToggleFollow,
 }) => {
   const [composerText, setComposerText] = useState('');
   const [composerMediaUrl, setComposerMediaUrl] = useState('');
@@ -62,16 +69,19 @@ export const FeedView: React.FC<FeedViewProps> = ({
     e.preventDefault();
     if (!composerText.trim()) return;
 
+    // Extract hashtags dynamically from text if present
+    const extractedTags = composerText.match(/#([a-zA-Z0-9_\u0080-\uFFFF]+)/g) || [];
+
     onAddPost({
       content: composerText.trim(),
       mediaUrl: composerMediaUrl.trim() || undefined,
-      tags: ['#Community'],
+      tags: extractedTags,
     });
 
     setComposerText('');
     setComposerMediaUrl('');
     setShowMediaInput(false);
-    onNotify('Post Published', 'Your update has been shared with your followers.', 'success');
+    onNotify('Post Published', 'Your update has been shared.', 'success');
   };
 
   const handleShare = (postId: string) => {
@@ -108,7 +118,8 @@ export const FeedView: React.FC<FeedViewProps> = ({
     }
 
     if (feedFilter === 'following') {
-      return p.author.handle === '@elena_dev' || p.author.handle === '@arivera';
+      if (!followedHandles || followedHandles.length === 0) return false;
+      return followedHandles.includes(p.author.handle);
     }
 
     if (feedFilter === 'media') {
@@ -537,69 +548,95 @@ export const FeedView: React.FC<FeedViewProps> = ({
           </h3>
 
           <div className="flex flex-col gap-2">
-            {TRENDING_TOPICS.map((topic) => (
-              <button
-                key={topic.tag}
-                onClick={() => onSelectTag(topic.tag)}
-                className="p-2 rounded-lg hover:bg-surface-container transition-colors cursor-pointer text-left flex justify-between items-center group"
-              >
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold text-on-surface group-hover:text-primary transition-colors">
-                    {topic.tag}
+            {trending.length === 0 ? (
+              <p className="text-xs text-outline italic py-2">
+                No trending hashtags yet. Include #hashtags in your posts to start a topic.
+              </p>
+            ) : (
+              trending.map((topic) => (
+                <button
+                  key={topic.tag}
+                  onClick={() => onSelectTag(topic.tag)}
+                  className="p-2 rounded-lg hover:bg-surface-container transition-colors cursor-pointer text-left flex justify-between items-center group"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-xs font-semibold text-on-surface group-hover:text-primary transition-colors">
+                      {topic.tag}
+                    </span>
+                    <span className="text-[10px] text-outline">{topic.category}</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-outline">
+                    {topic.postsCount}
                   </span>
-                  <span className="text-[10px] text-outline">{topic.category}</span>
-                </div>
-                <span className="text-[11px] font-mono text-outline">
-                  {topic.postsCount}
-                </span>
-              </button>
-            ))}
+                </button>
+              ))
+            )}
           </div>
         </div>
 
-        {/* Suggested Creators */}
+        {/* Suggested Members */}
         <div className="p-4 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-3">
           <h3 className="text-xs font-bold text-on-surface uppercase tracking-wider">
-            Suggested People
+            Community Members
           </h3>
 
           <div className="flex flex-col gap-3">
-            {SUGGESTED_USERS.map((user) => (
-              <div
-                key={user.id}
-                className="flex items-center justify-between gap-2.5 pb-2.5 border-b border-border-glass-dark last:border-b-0 last:pb-0"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <img
-                    src={user.avatar}
-                    alt={user.name}
-                    className="w-8 h-8 rounded-full object-cover shrink-0"
-                  />
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-semibold text-on-surface truncate">
-                      {user.name}
-                    </span>
-                    <span className="text-[10px] text-outline truncate">
-                      {user.handle}
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    if (!currentUser) {
-                      onOpenAuthModal?.('signin');
-                      onNotify('Sign In Required', 'Following creators is reserved for verified members (13+).', 'warning');
-                      return;
-                    }
-                    onNotify('Followed', `You are now following ${user.name}`, 'info');
-                  }}
-                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-surface-container hover:bg-primary-container hover:text-white transition-colors cursor-pointer shrink-0"
+            {suggestedUsers.length === 0 ? (
+              <p className="text-xs text-outline italic py-2">
+                No other members yet. Invite friends or publish updates to connect with the community.
+              </p>
+            ) : (
+              suggestedUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-center justify-between gap-2.5 pb-2.5 border-b border-border-glass-dark last:border-b-0 last:pb-0"
                 >
-                  Follow
-                </button>
-              </div>
-            ))}
+                  <div className="flex items-center gap-2 min-w-0">
+                    {user.avatar ? (
+                      <img
+                        src={user.avatar}
+                        alt={user.name}
+                        className="w-8 h-8 rounded-full object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-xs font-bold text-outline shrink-0">
+                        {user.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-semibold text-on-surface truncate">
+                        {user.name}
+                      </span>
+                      <span className="text-[10px] text-outline truncate">
+                        {user.handle}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      if (!currentUser) {
+                        onOpenAuthModal?.('signin');
+                        onNotify('Sign In Required', 'Please sign in to follow community members.', 'warning');
+                        return;
+                      }
+                      if (onToggleFollow) {
+                        onToggleFollow(user);
+                      } else {
+                        onNotify('Followed', `You are now following ${user.name}`, 'info');
+                      }
+                    }}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer shrink-0 ${
+                      user.isFollowing
+                        ? 'border border-border-glass-dark text-on-surface hover:bg-surface-container'
+                        : 'bg-primary-container text-white hover:opacity-90'
+                    }`}
+                  >
+                    {user.isFollowing ? 'Following' : 'Follow'}
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

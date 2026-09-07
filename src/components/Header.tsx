@@ -16,6 +16,7 @@ import {
   LogOut,
   Lock,
   Eye,
+  CheckCircle,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -46,29 +47,15 @@ export const Header: React.FC<HeaderProps> = ({
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
-  const notifications = [
-    {
-      id: 'notif-1',
-      title: 'Elena Vance liked your post',
-      desc: '"Just launched our open source component kit! ✨"',
-      time: '5m ago',
-      icon: Heart,
-    },
-    {
-      id: 'notif-2',
-      title: 'Alex Rivera commented',
-      desc: '"100% agreed with your perspective on feed algorithms."',
-      time: '30m ago',
-      icon: MessageSquare,
-    },
-    {
-      id: 'notif-3',
-      title: 'Devon Miles started following you',
-      desc: 'Architectural photographer & digital nomad.',
-      time: '2h ago',
-      icon: User,
-    },
-  ];
+  const [notifications, setNotifications] = useState<
+    Array<{
+      id: string;
+      title: string;
+      desc: string;
+      time: string;
+      icon: any;
+    }>
+  >([]);
 
   const navItems: { id: ViewMode; label: string }[] = [
     { id: 'feed', label: 'Feed' },
@@ -171,7 +158,9 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label="Notifications"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary"></span>
+              {notifications.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary"></span>
+              )}
             </button>
 
             {showNotifications && (
@@ -180,29 +169,38 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="font-semibold text-xs text-on-surface">
                     Notifications
                   </span>
-                  <span className="text-[11px] text-primary font-medium">3 new</span>
+                  <span className="text-[11px] text-outline">
+                    {notifications.length === 0 ? 'All caught up' : `${notifications.length} new`}
+                  </span>
                 </div>
-                <div className="flex flex-col gap-1.5 mt-2">
-                  {notifications.map((n) => (
-                    <div
-                      key={n.id}
-                      className="p-2.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer text-left flex gap-2.5 items-start"
-                    >
-                      <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
-                        <n.icon className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between text-xs font-medium text-on-surface">
-                          <span className="truncate">{n.title}</span>
-                          <span className="text-[10px] text-outline shrink-0 ml-1">{n.time}</span>
+                {notifications.length === 0 ? (
+                  <div className="py-6 px-4 text-center flex flex-col items-center gap-2 text-outline">
+                    <CheckCircle className="w-6 h-6 text-primary/70" />
+                    <p className="text-xs">No notifications yet. You're all caught up!</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5 mt-2">
+                    {notifications.map((n) => (
+                      <div
+                        key={n.id}
+                        className="p-2.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer text-left flex gap-2.5 items-start"
+                      >
+                        <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                          <n.icon className="w-3.5 h-3.5" />
                         </div>
-                        <p className="text-[11px] text-on-surface-variant mt-0.5 line-clamp-2">
-                          {n.desc}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between text-xs font-medium text-on-surface">
+                            <span className="truncate">{n.title}</span>
+                            <span className="text-[10px] text-outline shrink-0 ml-1">{n.time}</span>
+                          </div>
+                          <p className="text-[11px] text-on-surface-variant mt-0.5 line-clamp-2">
+                            {n.desc}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -217,21 +215,33 @@ export const Header: React.FC<HeaderProps> = ({
                 }}
                 className="flex items-center gap-2 rounded-full p-0.5 ring-2 ring-transparent hover:ring-primary transition-all cursor-pointer"
               >
-                <img
-                  src={currentUser.avatar}
-                  alt={currentUser.name}
-                  className="w-8 h-8 rounded-full object-cover border border-border-glass-dark"
-                />
+                {currentUser.avatar ? (
+                  <img
+                    src={currentUser.avatar}
+                    alt={currentUser.name}
+                    className="w-8 h-8 rounded-full object-cover border border-border-glass-dark"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-primary-container text-white flex items-center justify-center font-bold text-xs">
+                    {currentUser.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
               </button>
 
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-60 rounded-xl bg-surface border border-border-glass-dark p-2 shadow-xl z-50 animate-in fade-in duration-150">
                   <div className="flex items-center gap-2.5 p-2 pb-2.5 border-b border-border-glass-dark">
-                    <img
-                      src={currentUser.avatar}
-                      alt={currentUser.name}
-                      className="w-9 h-9 rounded-full object-cover border border-primary/30"
-                    />
+                    {currentUser.avatar ? (
+                      <img
+                        src={currentUser.avatar}
+                        alt={currentUser.name}
+                        className="w-9 h-9 rounded-full object-cover border border-primary/30"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-primary-container text-white flex items-center justify-center font-bold text-xs shrink-0">
+                        {currentUser.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <div className="flex flex-col overflow-hidden">
                       <span className="text-xs font-bold text-on-surface truncate">{currentUser.name}</span>
                       <span className="text-[11px] text-outline font-mono truncate">{currentUser.username}</span>

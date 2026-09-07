@@ -39,16 +39,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'posts' | 'media' | 'likes'>('posts');
   const [isEditing, setIsEditing] = useState(false);
-  const [bio, setBio] = useState('Building open-source tools for the decentralized web. Coffee enthusiast & design thinker.');
-  const [location, setLocation] = useState('Tokyo, Japan');
-  const [website, setWebsite] = useState('https://krono.social');
+  const [bio, setBio] = useState(currentUser?.bio || '');
+  const [location, setLocation] = useState(currentUser?.location || '');
+  const [website, setWebsite] = useState(currentUser?.website || '');
 
   const displayName = currentUser?.name || 'Guest Explorer';
   const displayHandle = currentUser?.username || '@guest';
   const displayLocation = currentUser?.location || location;
-  const displayAvatar =
-    currentUser?.avatar ||
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
+  const displayAvatar = currentUser?.avatar || '';
 
   const handleSaveBio = (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,11 +100,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         {/* Profile Info */}
         <div className="px-6 pb-6 pt-0 relative flex flex-col gap-4">
           <div className="flex justify-between items-end -mt-12 sm:-mt-14 mb-2">
-            <img
-              src={displayAvatar}
-              alt={displayName}
-              className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-surface object-cover shadow-md"
-            />
+            {displayAvatar ? (
+              <img
+                src={displayAvatar}
+                alt={displayName}
+                className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-surface object-cover shadow-md"
+              />
+            ) : (
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-surface bg-surface-container flex items-center justify-center text-xl sm:text-2xl font-bold text-outline shadow-md">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+            )}
             <div className="flex items-center gap-2">
               {currentUser ? (
                 <>
@@ -133,7 +137,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer shadow-sm"
                 >
                   <KeyRound className="w-3.5 h-3.5" />
-                  <span>Sign In (13+)</span>
+                  <span>Sign In</span>
                 </button>
               )}
             </div>
@@ -143,7 +147,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <div className="p-3.5 rounded-xl bg-surface-container border border-border-glass-dark flex items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2 text-outline">
                 <Eye className="w-4 h-4 text-primary shrink-0" />
-                <span>You are browsing as a guest. Sign in with Google (13+) to create your personal profile.</span>
+                <span>You are browsing as a guest. Sign in to post, like, comment, and create your profile.</span>
               </div>
               <button
                 onClick={() => onOpenAuthModal('signin')}
@@ -161,16 +165,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <textarea
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  rows={2}
+                  rows={3}
                   className="w-full p-2.5 rounded-lg bg-surface border border-border-glass-dark text-xs text-on-surface focus:outline-none focus:border-primary"
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-outline block mb-1">Location</label>
+                  <label className="text-xs text-outline block mb-1">Location (Optional)</label>
                   <input
                     type="text"
                     value={location}
+                    placeholder="e.g. San Francisco, Tokyo (Optional)"
                     onChange={(e) => setLocation(e.target.value)}
                     className="w-full p-2 rounded-lg bg-surface border border-border-glass-dark text-xs text-on-surface focus:outline-none focus:border-primary"
                   />
@@ -210,14 +215,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     <>
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold border border-emerald-500/20">
                         <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>Age 13+ Verified</span>
+                        <span>Verified Member</span>
                       </span>
-                      {currentUser.twoFactorEnabled && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-semibold border border-primary/20">
-                          <Lock className="w-3 h-3" />
-                          <span>2FA Enforced</span>
-                        </span>
-                      )}
                     </>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container text-outline text-[11px] font-medium border border-border-glass-dark">
@@ -228,22 +227,32 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <span className="text-xs text-outline font-mono">{displayHandle}</span>
               </div>
 
-              <p className="text-xs sm:text-sm text-on-surface leading-relaxed mt-1">
-                {bio}
-              </p>
+              {bio ? (
+                <p className="text-xs sm:text-sm text-on-surface leading-relaxed mt-1">
+                  {bio}
+                </p>
+              ) : (
+                <p className="text-xs text-outline italic mt-1">
+                  No bio added yet.
+                </p>
+              )}
 
               {/* Meta details */}
               <div className="flex flex-wrap items-center gap-4 text-xs text-outline pt-1">
-                <div className="flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-primary" />
-                  <span>{displayLocation}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <LinkIcon className="w-3.5 h-3.5" />
-                  <a href={website} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                    {website.replace('https://', '')}
-                  </a>
-                </div>
+                {displayLocation && (
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-primary" />
+                    <span>{displayLocation}</span>
+                  </div>
+                )}
+                {website && (
+                  <div className="flex items-center gap-1">
+                    <LinkIcon className="w-3.5 h-3.5" />
+                    <a href={website.startsWith('http') ? website : `https://${website}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                      {website.replace(/^https?:\/\//, '')}
+                    </a>
+                  </div>
+                )}
                 <div className="flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5" />
                   <span>Joined September 2026</span>

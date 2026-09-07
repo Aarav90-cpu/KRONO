@@ -1,8 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { ViewMode, FeedSubMode, FeedFilter, Post, AuthUserProfile } from './types';
-import { INITIAL_POSTS } from './data/mockData';
+import { ViewMode, FeedSubMode, FeedFilter, Post, AuthUserProfile, TrendingTopic, SuggestedUser } from './types';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
+import {
+  fetchPostsFromBackend,
+  createPostOnBackend,
+  likePostOnBackend,
+  bookmarkPostOnBackend,
+  addCommentOnBackend,
+  fetchTrendingFromBackend,
+  fetchSuggestedUsersFromBackend,
+  saveUserProfileToBackend,
+} from './services/api';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Footer } from './components/Footer';
@@ -32,7 +41,7 @@ export default function App() {
   // Authentication State
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalInitialTab, setAuthModalInitialTab] = useState<
-    'signin' | 'profile' | 'credentials' | '2fa'
+    'signin' | 'profile' | 'credentials' | 'security' | '2fa'
   >('signin');
   const [currentUser, setCurrentUser] = useState<AuthUserProfile | null>(() => {
     try {
@@ -47,14 +56,45 @@ export default function App() {
     return null;
   });
 
-  // Posts State
-  const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
+  // Posts & Community State (Backed by live Express backend)
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [trending, setTrending] = useState<TrendingTopic[]>([]);
+  const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
+  const [followedHandles, setFollowedHandles] = useState<string[]>([]);
 
   // New Post Modal
   const [isCastModalOpen, setIsCastModalOpen] = useState(false);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Fetch real posts, trending, and community users from backend on mount and when user session changes
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadData() {
+      try {
+        const [backendPosts, backendTrending, backendUsers] = await Promise.all([
+          fetchPostsFromBackend(currentUser?.uid),
+          fetchTrendingFromBackend(),
+          fetchSuggestedUsersFromBackend(currentUser?.uid),
+        ]);
+        if (isMounted) {
+          setPosts(backendPosts || []);
+          setTrending(backendTrending || []);
+          setSuggestedUsers(backendUsers || []);
+        }
+      } catch (err) {
+        console.warn('Initial backend fetch warning:', err);
+      }
+    }
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser?.uid]);
 
   // Listen to Firebase Auth state
   useEffect(() => {
@@ -65,8 +105,6 @@ export default function App() {
           let profile: AuthUserProfile;
           if (stored) {
             profile = JSON.parse(stored);
-            profile.ageVerified = true;
-            profile.twoFactorVerified = true;
           } else {
             const defaultUser = (firebaseUser.email?.split('@')[0] || 'aarav').toLowerCase();
             profile = {
@@ -78,17 +116,18 @@ export default function App() {
                 firebaseUser.photoURL ||
                 'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ',
               provider: 'google',
-              twoFactorEnabled: true,
+              twoFactorEnabled: false,
               twoFactorMethod: 'totp',
               twoFactorVerified: true,
               ageVerified: true,
-              location: 'Tokyo, Japan',
+              location: '',
               createdAt: new Date().toISOString(),
             };
           }
           setCurrentUser(profile);
           localStorage.setItem('krono_active_uid', firebaseUser.uid);
           localStorage.setItem(`krono_profile_${firebaseUser.uid}`, JSON.stringify(profile));
+          saveUserProfileToBackend(profile);
         } catch (err) {
           console.error('Failed to sync auth state', err);
         }
@@ -145,48 +184,93 @@ export default function App() {
   const handleSignOut = async () => {
     try {
       await signOut(auth);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('Sign out warning', err);
     }
     localStorage.removeItem('krono_active_uid');
     setCurrentUser(null);
     addToast('Signed Out', 'You have been signed out of your account.', 'info');
   };
 
-  const handleAddPost = (postData: Partial<Post>) => {
-    const activeName = currentUser?.name || 'Aarav';
+  const handleAddPost = async (postData: Partial<Post>) => {
+    const activeName = currentUser?.name || 'Aarav Ravindra Kharade';
     const activeHandle = currentUser?.username || '@aarav';
     const activeAvatar =
       currentUser?.avatar ||
       'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ';
 
-    const newPost: Post = {
-      id: `post-${Date.now()}`,
-      author: {
-        name: activeName,
-        handle: activeHandle,
-        avatar: activeAvatar,
-        verified: true,
-      },
-      timestamp: 'Just now',
-      content: postData.content || '',
-      mediaUrl: postData.mediaUrl,
-      tags: postData.tags || ['#Community'],
-      metrics: {
-        likes: 0,
-        comments: 0,
-        shares: 0,
-        isLiked: false,
-        isBookmarked: false,
-      },
-      commentsList: [],
-    };
+    try {
+      const created = await createPostOnBackend(
+        {
+          content: postData.content || '',
+          mediaUrl: postData.mediaUrl,
+          tags: postData.tags || ['#Community'],
+        },
+        {
+          name: activeName,
+          handle: activeHandle,
+          avatar: activeAvatar,
+          bio: currentUser?.email,
+        },
+        currentUser?.uid
+      );
 
-    setPosts((prev) => [newPost, ...prev]);
-    addToast('Post Published', 'Your update is now live on the feed.', 'success');
+      if (created) {
+        setPosts((prev) => [created, ...prev]);
+        addToast('Post Published', 'Your update is now live on the backend feed.', 'success');
+        // Refresh trending topics
+        fetchTrendingFromBackend().then((t) => setTrending(t));
+      }
+    } catch (err) {
+      console.error('Failed to publish post to backend:', err);
+      // Fallback local post
+      const fallbackPost: Post = {
+        id: `post-${Date.now()}`,
+        author: {
+          name: activeName,
+          handle: activeHandle,
+          avatar: activeAvatar,
+          verified: true,
+        },
+        timestamp: 'Just now',
+        content: postData.content || '',
+        mediaUrl: postData.mediaUrl,
+        tags: postData.tags || [],
+        metrics: {
+          likes: 0,
+          comments: 0,
+          shares: 0,
+          isLiked: false,
+          isBookmarked: false,
+        },
+        commentsList: [],
+      };
+      setPosts((prev) => [fallbackPost, ...prev]);
+      addToast('Post Published', 'Your update is now live.', 'success');
+    }
   };
 
-  const handleToggleLike = (postId: string) => {
+  const handleToggleFollow = (user: SuggestedUser) => {
+    setSuggestedUsers((prev) =>
+      prev.map((u) => (u.id === user.id ? { ...u, isFollowing: !u.isFollowing } : u))
+    );
+    setFollowedHandles((prev) => {
+      const isFollowing = prev.includes(user.handle);
+      addToast(
+        isFollowing ? 'Unfollowed' : 'Followed',
+        isFollowing
+          ? `You unfollowed ${user.name}`
+          : `You are now following ${user.name}`,
+        'info'
+      );
+      return isFollowing
+        ? prev.filter((h) => h !== user.handle)
+        : [...prev, user.handle];
+    });
+  };
+
+  const handleToggleLike = async (postId: string) => {
+    // Optimistic UI update
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id === postId) {
@@ -203,9 +287,12 @@ export default function App() {
         return p;
       })
     );
+
+    // Sync with backend
+    await likePostOnBackend(postId, currentUser?.uid);
   };
 
-  const handleToggleBookmark = (postId: string) => {
+  const handleToggleBookmark = async (postId: string) => {
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id === postId) {
@@ -226,45 +313,66 @@ export default function App() {
         return p;
       })
     );
+
+    // Sync with backend
+    await bookmarkPostOnBackend(postId, currentUser?.uid);
   };
 
-  const handleAddComment = (postId: string, commentText: string) => {
-    const activeName = currentUser?.name || 'Aarav';
+  const handleAddComment = async (postId: string, commentText: string) => {
+    const activeName = currentUser?.name || 'Aarav Ravindra Kharade';
     const activeHandle = currentUser?.username || '@aarav';
     const activeAvatar =
       currentUser?.avatar ||
       'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ';
 
-    setPosts((prev) =>
-      prev.map((p) => {
-        if (p.id === postId) {
-          const newComment = {
-            id: `c-${Date.now()}`,
-            author: {
-              name: activeName,
-              handle: activeHandle,
-              avatar: activeAvatar,
-            },
-            timestamp: 'Just now',
-            content: commentText,
-          };
-          return {
-            ...p,
-            metrics: {
-              ...p.metrics,
-              comments: p.metrics.comments + 1,
-            },
-            commentsList: [...(p.commentsList || []), newComment],
-          };
-        }
-        return p;
-      })
-    );
+    try {
+      const res = await addCommentOnBackend(postId, commentText, {
+        name: activeName,
+        handle: activeHandle,
+        avatar: activeAvatar,
+      });
+
+      if (res?.post) {
+        setPosts((prev) => prev.map((p) => (p.id === postId ? res.post : p)));
+        addToast('Reply Posted', 'Your reply is now live on the backend thread.', 'success');
+      }
+    } catch (err) {
+      console.error('Failed to add comment to backend:', err);
+      // Fallback local update
+      setPosts((prev) =>
+        prev.map((p) => {
+          if (p.id === postId) {
+            const newComment = {
+              id: `c-${Date.now()}`,
+              author: {
+                name: activeName,
+                handle: activeHandle,
+                avatar: activeAvatar,
+              },
+              timestamp: 'Just now',
+              content: commentText,
+            };
+            return {
+              ...p,
+              metrics: {
+                ...p.metrics,
+                comments: p.metrics.comments + 1,
+              },
+              commentsList: [...(p.commentsList || []), newComment],
+            };
+          }
+          return p;
+        })
+      );
+      addToast('Reply Posted', 'Your reply has been posted.', 'success');
+    }
   };
 
   const activeUserHandle = currentUser?.username || '@aarav';
   const bookmarkedPosts = posts.filter((p) => p.metrics.isBookmarked);
-  const userPosts = posts.filter((p) => p.author.handle === activeUserHandle || p.author.handle === '@aarav');
+  const userPosts = posts.filter(
+    (p) => p.author.handle === activeUserHandle || p.author.handle === '@aarav'
+  );
 
   return (
     <div className="min-h-screen bg-background text-on-surface flex flex-col font-sans transition-colors duration-300 antialiased selection:bg-primary/20 selection:text-primary">
@@ -295,6 +403,7 @@ export default function App() {
               onViewChange={setCurrentView}
               feedFilter={feedFilter}
               onFeedFilterChange={setFeedFilter}
+              trending={trending}
               onSelectTag={(tag) => {
                 setSearchQuery(tag);
                 setCurrentView('feed');
@@ -323,17 +432,35 @@ export default function App() {
               onToggleBookmark={handleToggleBookmark}
               onToggleLike={handleToggleLike}
               onAddComment={handleAddComment}
+              currentUser={currentUser}
+              onOpenAuthModal={(tab) => {
+                setAuthModalInitialTab(tab || 'signin');
+                setIsAuthModalOpen(true);
+              }}
+              trending={trending}
+              suggestedUsers={suggestedUsers}
+              followedHandles={followedHandles}
+              onToggleFollow={handleToggleFollow}
             />
           )}
 
           {currentView === 'explore' && (
             <ExploreView
+              posts={posts}
+              trending={trending}
+              suggestedUsers={suggestedUsers}
               onNotify={addToast}
               onSelectTag={(tag) => {
                 setSearchQuery(tag);
                 setCurrentView('feed');
                 addToast('Tag Filter', `Filtering feed by ${tag}`, 'info');
               }}
+              currentUser={currentUser}
+              onOpenAuthModal={(tab) => {
+                setAuthModalInitialTab(tab || 'signin');
+                setIsAuthModalOpen(true);
+              }}
+              onToggleFollow={handleToggleFollow}
             />
           )}
 
@@ -348,7 +475,7 @@ export default function App() {
 
           {currentView === 'profile' && (
             <ProfileView
-              userPosts={userPosts.length > 0 ? userPosts : posts.slice(0, 2)}
+              userPosts={userPosts}
               onToggleLike={handleToggleLike}
               onToggleBookmark={handleToggleBookmark}
               onBackToFeed={() => setCurrentView('feed')}
@@ -371,9 +498,10 @@ export default function App() {
         isOpen={isCastModalOpen}
         onClose={() => setIsCastModalOpen(false)}
         onSubmitPost={handleAddPost}
+        currentUser={currentUser}
       />
 
-      {/* Full Authentication & 2FA Modal */}
+      {/* Full Authentication Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
