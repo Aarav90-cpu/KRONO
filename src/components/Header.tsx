@@ -264,7 +264,7 @@ export const Header: React.FC<HeaderProps> = ({
                       className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-on-surface hover:bg-surface-container transition-colors cursor-pointer text-left"
                     >
                       <Lock className="w-3.5 h-3.5 text-secondary" />
-                      <span>Change Email & Password</span>
+                      <span>Linked Google Account</span>
                     </button>
 
                     <button

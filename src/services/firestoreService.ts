@@ -409,21 +409,38 @@ export async function syncUserProfileToFirestore(
       name: profile.name.slice(0, 80),
       username: profile.username.slice(0, 50),
       email: profile.email || '',
-      avatar: profile.avatar || '',
-      bio: profile.bio || existingData.bio || '',
-      location: profile.location || existingData.location || '',
+      avatar: typeof profile.avatar === 'string' ? profile.avatar : (existingData.avatar || ''),
+      bio: typeof profile.bio === 'string' ? profile.bio.slice(0, 280) : (existingData.bio || ''),
+      location: typeof profile.location === 'string' ? profile.location.trim().slice(0, 100) : (existingData.location || ''),
       followers: Array.isArray(profile.followers)
         ? profile.followers
         : existingData.followers || [],
       following: Array.isArray(profile.following)
         ? profile.following
         : existingData.following || [],
-      createdAt: profile.createdAt || new Date().toISOString(),
+      createdAt: profile.createdAt || existingData.createdAt || new Date().toISOString(),
     };
 
     await setDoc(userRef, payload, { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `users/${profile.uid}`);
+  }
+}
+
+/**
+ * Update user profile picture in Firestore directly
+ */
+export async function updateUserAvatarInFirestore(
+  uid: string,
+  avatarUrl: string
+): Promise<void> {
+  const userRef = doc(db, 'users', uid);
+  try {
+    await updateDoc(userRef, {
+      avatar: avatarUrl,
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
   }
 }
 

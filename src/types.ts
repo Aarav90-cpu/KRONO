@@ -75,6 +75,8 @@ export interface SuggestedUser {
   handle: string;
   avatar: string;
   bio: string;
+  location?: string;
+  website?: string;
   isFollowing?: boolean;
   followersCount?: number;
   followingCount?: number;

@@ -34,7 +34,7 @@ service cloud.firestore {
              data.name is string && data.name.size() > 0 && data.name.size() <= 80 &&
              data.username is string && data.username.size() > 0 && data.username.size() <= 50 &&
              (!('email' in data) || (data.email is string && data.email.size() <= 120)) &&
-             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 1000)) &&
+             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 200000)) &&
              (!('bio' in data) || (data.bio is string && data.bio.size() <= 280)) &&
              (!('location' in data) || (data.location is string && data.location.size() <= 100)) &&
              (!('followers' in data) || (data.followers is list && data.followers.size() <= 5000)) &&
@@ -48,6 +48,7 @@ service cloud.firestore {
              data.authorName is string && data.authorName.size() > 0 && data.authorName.size() <= 80 &&
              data.authorHandle is string && data.authorHandle.size() > 0 && data.authorHandle.size() <= 50 &&
              data.content is string && data.content.size() > 0 && data.content.size() <= 2000 &&
+             (!('authorAvatar' in data) || (data.authorAvatar is string && data.authorAvatar.size() <= 200000)) &&
              (!('mediaUrl' in data) || (data.mediaUrl is string && data.mediaUrl.size() <= 1000)) &&
              (!('tags' in data) || (data.tags is list && data.tags.size() <= 20)) &&
              (!('likedBy' in data) || (data.likedBy is list && data.likedBy.size() <= 10000)) &&
@@ -61,6 +62,7 @@ service cloud.firestore {
              data.postId is string && data.postId.size() > 0 && data.postId.size() <= 128 &&
              data.authorId is string && data.authorId.size() > 0 && data.authorId.size() <= 128 &&
              data.authorName is string && data.authorName.size() > 0 && data.authorName.size() <= 80 &&
+             (!('authorAvatar' in data) || (data.authorAvatar is string && data.authorAvatar.size() <= 200000)) &&
              data.content is string && data.content.size() > 0 && data.content.size() <= 1000;
     }
 

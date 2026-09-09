@@ -97,7 +97,8 @@ export const FeedView: React.FC<FeedViewProps> = ({
   };
 
   const handleShare = (postId: string) => {
-    navigator.clipboard.writeText(`https://krono.social/post/${postId}`);
+    const shareUrl = `https://krono-social.duckdns.org/post/${postId}`;
+    navigator.clipboard.writeText(shareUrl);
     onNotify('Link Copied', 'Post URL copied to clipboard.', 'success');
   };
 

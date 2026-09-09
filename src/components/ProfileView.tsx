@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Post, AuthUserProfile, SuggestedUser } from '../types';
 import { UserAvatar } from './UserAvatar';
+import { auth } from '../firebase';
 import {
   Calendar,
   MapPin,
@@ -20,8 +21,10 @@ import {
   UserPlus,
   UserCheck,
   Repeat2,
+  Camera,
 } from 'lucide-react';
 import { NetworkModal } from './NetworkModal';
+import { ChangePfpModal } from './ChangePfpModal';
 
 interface ProfileViewProps {
   userPosts: Post[];
@@ -64,6 +67,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [website, setWebsite] = useState(currentUser?.website || '');
   const [isNetworkModalOpen, setIsNetworkModalOpen] = useState(false);
   const [networkModalTab, setNetworkModalTab] = useState<'following' | 'followers'>('following');
+  const [isChangePfpOpen, setIsChangePfpOpen] = useState(false);
+
+  // Synchronize state when currentUser updates (e.g. after Firestore fetch or login)
+  useEffect(() => {
+    if (currentUser) {
+      setBio(currentUser.bio || '');
+      setLocation(currentUser.location || '');
+      setWebsite(currentUser.website || '');
+    }
+  }, [currentUser]);
 
   const isViewingSelf =
     !viewingUser ||
@@ -77,8 +90,20 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const displayName = activeUser?.name || (isViewingSelf ? 'Guest Explorer' : 'Community Member');
   const displayHandle =
     (activeUser as any)?.username || (activeUser as any)?.handle || '@guest';
-  const displayLocation = (activeUser as any)?.location || location;
+  const displayLocation = isViewingSelf
+    ? (currentUser?.location !== undefined ? currentUser.location : location)
+    : (viewingUser?.location || '');
   const displayAvatar = activeUser?.avatar || '';
+
+  const handleSaveAvatar = async (newAvatarUrl: string) => {
+    if (!currentUser || !onUpdateCurrentUser) return;
+    const updated: AuthUserProfile = {
+      ...currentUser,
+      avatar: newAvatarUrl,
+    };
+    onUpdateCurrentUser(updated);
+    onNotify('Profile Picture Updated', 'Your new profile picture has been saved.', 'success');
+  };
 
   const followingCount =
     (activeUser as any)?.followingCount ?? ((activeUser as any)?.following || []).length;
@@ -159,16 +184,42 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         {/* Profile Info */}
         <div className="px-6 pb-6 pt-0 relative flex flex-col gap-4">
           <div className="flex justify-between items-end -mt-12 sm:-mt-14 mb-2">
-            <UserAvatar
-              src={displayAvatar}
-              name={displayName}
-              size="xl"
-              className="border-4 border-surface shadow-md"
-            />
+            <div className="relative group">
+              <UserAvatar
+                src={displayAvatar}
+                name={displayName}
+                size="xl"
+                className="border-4 border-surface shadow-md"
+              />
+              {isViewingSelf && currentUser && (
+                <button
+                  type="button"
+                  id="profile-avatar-overlay-btn"
+                  onClick={() => setIsChangePfpOpen(true)}
+                  className="absolute inset-0 rounded-full bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white cursor-pointer backdrop-blur-[2px]"
+                  title="Change Profile Picture"
+                  aria-label="Change Profile Picture"
+                >
+                  <Camera className="w-5 h-5 mb-0.5" />
+                  <span className="text-[10px] font-bold tracking-tight">Edit Photo</span>
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {isViewingSelf ? (
                 currentUser ? (
                   <>
+                    <button
+                      id="profile-change-pfp-btn"
+                      onClick={() => setIsChangePfpOpen(true)}
+                      className="px-3 py-2 rounded-lg border border-border-glass-dark hover:bg-surface-container text-xs font-semibold text-on-surface transition-colors flex items-center gap-1.5 cursor-pointer"
+                      title="Update your avatar or upload a custom photo"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-primary" />
+                      <span className="hidden sm:inline">Change Photo</span>
+                      <span className="sm:hidden">Photo</span>
+                    </button>
+
                     <button
                       onClick={() => onOpenAuthModal('profile')}
                       className="px-3.5 py-2 rounded-lg border border-border-glass-dark hover:bg-surface-container text-xs font-semibold text-on-surface transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -266,20 +317,34 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-outline block mb-1">Location (Optional)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-outline block">Location (Optional)</label>
+                    {location && (
+                      <button
+                        type="button"
+                        id="clear-location-btn"
+                        onClick={() => setLocation('')}
+                        className="text-[11px] text-error hover:underline cursor-pointer"
+                      >
+                        Clear location
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={location}
-                    placeholder="e.g. San Francisco, Tokyo (Optional)"
+                    placeholder="e.g. San Francisco, London (leave blank if preferred)"
                     onChange={(e) => setLocation(e.target.value)}
                     className="w-full p-2 rounded-lg bg-surface border border-border-glass-dark text-xs text-on-surface focus:outline-none focus:border-primary"
                   />
+                  <p className="text-[10px] text-outline mt-1">Leave empty if you do not want to set your location.</p>
                 </div>
                 <div>
                   <label className="text-xs text-outline block mb-1">Website</label>
                   <input
                     type="text"
                     value={website}
+                    placeholder="e.g. yourwebsite.com"
                     onChange={(e) => setWebsite(e.target.value)}
                     className="w-full p-2 rounded-lg bg-surface border border-border-glass-dark text-xs text-on-surface focus:outline-none focus:border-primary"
                   />
@@ -332,7 +397,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
               {/* Meta details */}
               <div className="flex flex-wrap items-center gap-4 text-xs text-outline pt-1">
-                {displayLocation && (
+                {displayLocation && displayLocation.trim() !== '' && (
                   <div className="flex items-center gap-1">
                     <MapPin className="w-3.5 h-3.5 text-primary" />
                     <span>{displayLocation}</span>
@@ -431,6 +496,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         followedHandles={followedHandles}
         onToggleFollow={onToggleFollow || (() => {})}
         onOpenAuthModal={onOpenAuthModal}
+      />
+
+      {/* Change Profile Picture Modal */}
+      <ChangePfpModal
+        isOpen={isChangePfpOpen}
+        onClose={() => setIsChangePfpOpen(false)}
+        currentAvatar={currentUser?.avatar || ''}
+        userName={currentUser?.name || displayName}
+        userEmail={currentUser?.email}
+        googlePhotoUrl={auth.currentUser?.photoURL || ''}
+        onSaveAvatar={handleSaveAvatar}
       />
 
       {/* Posts list */}
@@ -547,10 +623,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   <span>{post.metrics.comments}</span>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const shareUrl = `https://krono-social.duckdns.org/post/${post.id}`;
+                    navigator.clipboard.writeText(shareUrl);
+                    onNotify('Link Copied', 'Post URL copied to clipboard.', 'success');
+                  }}
+                  className="flex items-center gap-1.5 hover:text-primary transition-colors cursor-pointer"
+                  title="Share post"
+                >
                   <Share2 className="w-4 h-4" />
                   <span>{post.metrics.shares}</span>
-                </div>
+                </button>
               </div>
             </article>
           ))
