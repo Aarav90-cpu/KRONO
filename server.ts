@@ -2,8 +2,23 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
+import dotenv from 'dotenv';
 
-const PORT = 3000;
+// Load environment variables
+dotenv.config();
+
+// Validate required environment variables
+function validateEnvironment(): void {
+  const requiredVars = ['GEMINI_API_KEY'];
+  const missingVars = requiredVars.filter((varName) => !process.env[varName]);
+
+  if (missingVars.length > 0) {
+    console.warn(`Warning: Missing environment variables: ${missingVars.join(', ')}`);
+    console.warn('Some features may not work correctly. Please check your .env file.');
+  }
+}
+
+const PORT = parseInt(process.env.PORT || '3000', 10);
 const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
 
 // Types
@@ -1044,4 +1059,5 @@ async function startServer() {
   });
 }
 
+validateEnvironment();
 startServer();
