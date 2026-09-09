@@ -62,7 +62,6 @@ hub-debug.log*
 *.emulator.cache/
 .runtimeconfig.json
 firebase-blueprint.json
-firebase-applet-config.json
 security_spec.md
 
 # Local databases and runtime data
