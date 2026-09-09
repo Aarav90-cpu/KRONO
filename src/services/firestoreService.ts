@@ -12,8 +12,13 @@ import {
   orderBy,
   limit,
 } from 'firebase/firestore';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Post, AuthUserProfile, SuggestedUser, PostComment, TrendingTopic } from '../types';
+import {
+  saveUserProfileToBackend,
+  addCommentOnBackend,
+  searchUsersOnBackend,
+} from './api';
 
 /**
  * Format relative timestamp from an ISO date or Date object
@@ -353,53 +358,87 @@ export async function toggleFirestoreRepost(
 }
 
 /**
- * Add a comment to a post in Firestore
+ * Add a comment to a post in Firestore and synchronize with backend
  */
 export async function addFirestoreComment(
   postId: string,
   commentData: {
     author: { name: string; handle: string; avatar: string };
     content: string;
-  }
+  },
+  userId?: string
 ): Promise<PostComment> {
+  let createdComment: PostComment | null = null;
   const postRef = doc(db, 'posts', postId);
+
   try {
     const snap = await getDoc(postRef);
-    if (!snap.exists()) {
-      throw new Error(`Post ${postId} does not exist`);
+    if (snap.exists()) {
+      const data = snap.data();
+      const commentsList: PostComment[] = Array.isArray(data.commentsList)
+        ? [...data.commentsList]
+        : [];
+
+      const newComment: PostComment = {
+        id: `c_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+        author: commentData.author,
+        timestamp: 'just now',
+        content: commentData.content.slice(0, 1000),
+      };
+
+      commentsList.push(newComment);
+
+      await updateDoc(postRef, {
+        commentsList,
+        commentsCount: commentsList.length,
+      });
+
+      createdComment = newComment;
     }
-    const data = snap.data();
-    const commentsList: PostComment[] = Array.isArray(data.commentsList)
-      ? [...data.commentsList]
-      : [];
-
-    const newComment: PostComment = {
-      id: `c_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
-      author: commentData.author,
-      timestamp: 'just now',
-      content: commentData.content.slice(0, 1000),
-    };
-
-    commentsList.push(newComment);
-
-    await updateDoc(postRef, {
-      commentsList,
-      commentsCount: commentsList.length,
-    });
-
-    return newComment;
   } catch (err) {
-    handleFirestoreError(err, OperationType.UPDATE, `posts/${postId}`);
+    console.warn('Firestore comment update had warning, will ensure backend persistence:', err);
   }
+
+  // Always synchronize to the Express backend database for dual persistence
+  try {
+    const backendRes = await addCommentOnBackend(
+      postId,
+      commentData.content,
+      commentData.author,
+      userId
+    );
+    if (backendRes?.comment && !createdComment) {
+      createdComment = backendRes.comment;
+    }
+  } catch (backendErr) {
+    console.warn('Backend comment sync warning:', backendErr);
+  }
+
+  if (createdComment) {
+    return createdComment;
+  }
+
+  return {
+    id: `c_${Date.now()}`,
+    author: commentData.author,
+    timestamp: 'just now',
+    content: commentData.content,
+  };
 }
 
 /**
- * Save or sync user profile in Firestore
+ * Save or sync user profile in Firestore and Express backend
  */
 export async function syncUserProfileToFirestore(
   profile: AuthUserProfile
 ): Promise<void> {
   const userRef = doc(db, 'users', profile.uid);
+
+  // Sync to Express backend so users are immediately searchable
+  saveUserProfileToBackend(profile).catch((err) => {
+    console.warn('Backend user profile sync warning:', err);
+  });
+
   try {
     const snap = await getDoc(userRef);
     const existingData = snap.exists() ? snap.data() : {};
@@ -423,7 +462,60 @@ export async function syncUserProfileToFirestore(
 
     await setDoc(userRef, payload, { merge: true });
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `users/${profile.uid}`);
+    console.warn('Firestore profile sync error (backend has updated):', err);
+  }
+}
+
+/**
+ * Search across community users who have signed in
+ */
+export async function searchCommunityUsers(
+  query: string,
+  currentUid?: string
+): Promise<SuggestedUser[]> {
+  try {
+    const backendResults = await searchUsersOnBackend(query, currentUid);
+    if (Array.isArray(backendResults) && backendResults.length > 0) {
+      return backendResults;
+    }
+  } catch (err) {
+    console.warn('Search backend fallback:', err);
+  }
+
+  // Client-side / Firestore fallback
+  try {
+    const qClean = query.trim().toLowerCase().replace(/^@/, '');
+    const usersSnap = await getDocs(collection(db, 'users'));
+    const matched: SuggestedUser[] = [];
+
+    usersSnap.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (!data) return;
+      if (currentUid && data.uid === currentUid) return;
+
+      const name = (data.name || '').toLowerCase();
+      const username = (data.username || '').toLowerCase();
+      const bio = (data.bio || '').toLowerCase();
+      const email = (data.email || '').toLowerCase();
+
+      if (!qClean || name.includes(qClean) || username.includes(qClean) || bio.includes(qClean) || email.includes(qClean)) {
+        matched.push({
+          id: data.uid,
+          name: data.name || 'Member',
+          handle: data.username || `@user_${data.uid.slice(0, 5)}`,
+          avatar: data.avatar || '',
+          bio: data.bio || '',
+          followersCount: Array.isArray(data.followers) ? data.followers.length : 0,
+          followingCount: Array.isArray(data.following) ? data.following.length : 0,
+          isFollowing: false,
+        });
+      }
+    });
+
+    return matched;
+  } catch (err) {
+    console.warn('Firestore user search error:', err);
+    return [];
   }
 }
 

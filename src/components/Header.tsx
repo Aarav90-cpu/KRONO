@@ -9,9 +9,6 @@ import {
   Moon,
   Bookmark,
   User,
-  Heart,
-  MessageSquare,
-  Sparkles,
   Shield,
   KeyRound,
   LogOut,
@@ -170,9 +167,20 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="font-semibold text-xs text-on-surface">
                     Notifications
                   </span>
-                  <span className="text-[11px] text-outline">
-                    {notifications.length === 0 ? 'All caught up' : `${notifications.length} new`}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-outline">
+                      {notifications.length === 0 ? 'All caught up' : `${notifications.length} new`}
+                    </span>
+                    {notifications.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setNotifications([])}
+                        className="text-[10px] text-primary hover:underline cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {notifications.length === 0 ? (
                   <div className="py-6 px-4 text-center flex flex-col items-center gap-2 text-outline">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ViewMode, FeedSubMode, FeedFilter, Post, AuthUserProfile, TrendingTopic, SuggestedUser } from './types';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut, updateProfile } from 'firebase/auth';

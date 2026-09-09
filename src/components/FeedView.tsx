@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FeedSubMode, FeedFilter, Post, PostComment, AuthUserProfile, TrendingTopic, SuggestedUser } from '../types';
+import { FeedSubMode, FeedFilter, Post, AuthUserProfile, TrendingTopic, SuggestedUser } from '../types';
 import { UserAvatar } from './UserAvatar';
 import {
   Clock,
@@ -10,13 +10,10 @@ import {
   Bookmark,
   Send,
   Image,
-  Sparkles,
-  Check,
   CheckCircle,
   Lock,
   KeyRound,
   Eye,
-  ShieldCheck,
   Repeat2,
   Quote,
   UserPlus,
@@ -531,7 +528,9 @@ export const FeedView: React.FC<FeedViewProps> = ({
                     >
                       <MessageSquare className="w-4 h-4" />
                       <span>
-                        {(post.commentsList?.length || 0) + post.metrics.comments}
+                        {post.commentsList && post.commentsList.length > 0
+                          ? post.commentsList.length
+                          : (post.metrics.comments || 0)}
                       </span>
                     </button>
 
@@ -616,7 +615,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
                   {isCommentsOpen && (
                     <div className="pt-3 border-t border-border-glass-dark flex flex-col gap-3 animate-in fade-in duration-150">
                       {/* Existing comments */}
-                      {post.commentsList && post.commentsList.length > 0 && (
+                      {post.commentsList && post.commentsList.length > 0 ? (
                         <div className="flex flex-col gap-2.5">
                           {post.commentsList.map((c) => (
                             <div
@@ -639,6 +638,10 @@ export const FeedView: React.FC<FeedViewProps> = ({
                               </div>
                             </div>
                           ))}
+                        </div>
+                      ) : (
+                        <div className="py-2.5 text-center text-xs text-outline italic">
+                          No replies yet. Start the conversation below!
                         </div>
                       )}
 

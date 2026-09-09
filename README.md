@@ -17,7 +17,7 @@ A OpenSource Social Media Platform!
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/Icey067/KRONO.git
+git clone https://github.com/Aarav90-cpu/KRONO.git
 cd KRONO
 ```
 

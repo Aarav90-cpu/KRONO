@@ -74,7 +74,7 @@ export const ChangePfpModal: React.FC<ChangePfpModalProps> = ({
   onClose,
   currentAvatar = '',
   userName = 'User',
-  userEmail = '',
+  userEmail: _userEmail = '',
   googlePhotoUrl = '',
   onSaveAvatar,
 }) => {
@@ -98,6 +98,13 @@ export const ChangePfpModal: React.FC<ChangePfpModalProps> = ({
     setErrorMsg('');
     if (!file.type.startsWith('image/')) {
       setErrorMsg('Please upload a valid image file (PNG, JPG, WebP).');
+      return;
+    }
+
+    if (file.size >= 100 * 1024 * 1024) {
+      setErrorMsg(
+        `Image exceeds the 100MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Please select an image under 100MB.`
+      );
       return;
     }
 

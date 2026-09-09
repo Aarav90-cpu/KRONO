@@ -7,8 +7,6 @@ import {
   Compass,
   Bookmark,
   User,
-  Hash,
-  Sparkles,
 } from 'lucide-react';
 
 interface SidebarProps {

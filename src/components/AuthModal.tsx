@@ -12,13 +12,11 @@ import { ChangePfpModal } from './ChangePfpModal';
 import {
   X,
   Shield,
-  Smartphone,
   KeyRound,
   Mail,
   User,
   AtSign,
   Lock,
-  CheckCircle2,
   AlertCircle,
   Copy,
   Check,
@@ -65,7 +63,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Security States
   const [twoFactorChoice, setTwoFactorChoice] = useState<TwoFactorMethod>('totp');
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
-  const [tempPhone, setTempPhone] = useState('+1 (555) 019-2834');
   const [totpSecret, setTotpSecret] = useState('KRONO-7749-AUTH-9281');
 
   // Sync state when currentUser changes or modal opens
@@ -78,9 +75,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setFormBio(currentUser.bio || '');
       setTwoFactorEnabled(currentUser.twoFactorEnabled || false);
       setTwoFactorChoice(currentUser.twoFactorMethod || 'totp');
-      if (currentUser.phoneNumber) {
-        setTempPhone(currentUser.phoneNumber);
-      }
       if (currentUser.totpSecret) {
         setTotpSecret(currentUser.totpSecret);
       }
@@ -529,7 +523,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
                 </div>
                 <p className="text-[11px] text-outline leading-relaxed">
-                  Your identity is directly authenticated with Google. Account access, password security, and recovery are securely managed through your Google Account.
+                  Your identity is directly authenticated with Google. Account access, session security, and profile identity are securely linked to your Google Account.
                 </p>
               </div>
 

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { X, Image, Hash, Send } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Image, Send, Upload, AlertCircle, Trash2, Loader2 } from 'lucide-react';
 import { Post, AuthUserProfile } from '../types';
 import { UserAvatar } from './UserAvatar';
+import { uploadImageToBackend, MAX_ALLOWED_IMAGE_SIZE_BYTES } from '../services/api';
 
 interface CastModalProps {
   isOpen: boolean;
@@ -21,10 +22,53 @@ export const CastModal: React.FC<CastModalProps> = ({
   const [content, setContent] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
   const [showMediaInput, setShowMediaInput] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageSizeText, setImageSizeText] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState('');
   const [customTags, setCustomTags] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
+
+  const handleProcessFile = async (file: File) => {
+    setImageError(null);
+
+    if (!file.type.startsWith('image/')) {
+      setImageError('Please select a valid image file (PNG, JPG, WebP, GIF).');
+      return;
+    }
+
+    // Strict 100MB size limit check
+    if (file.size >= MAX_ALLOWED_IMAGE_SIZE_BYTES) {
+      const sizeInMb = (file.size / (1024 * 1024)).toFixed(1);
+      setImageError(`Image (${sizeInMb} MB) exceeds the 100MB limit. Please upload an image smaller than 100MB.`);
+      return;
+    }
+
+    const sizeFormatted = (file.size / (1024 * 1024)).toFixed(2);
+    setImageSizeText(`${sizeFormatted} MB`);
+    setIsUploading(true);
+
+    try {
+      const result = await uploadImageToBackend(file);
+      setMediaUrl(result.url);
+      setShowMediaInput(true);
+    } catch (err: any) {
+      setImageError(err.message || 'Failed to upload image. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleProcessFile(file);
+    }
+    // Reset file input value so selecting the same file again triggers onChange
+    if (e.target) e.target.value = '';
+  };
 
   const handleAddTag = () => {
     let clean = tagInput.trim();
@@ -42,7 +86,7 @@ export const CastModal: React.FC<CastModalProps> = ({
 
   const handlePublish = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim()) return;
+    if (!content.trim() || isUploading) return;
 
     // Extract hashtags dynamically from text
     const textTags = content.match(/#([a-zA-Z0-9_\u0080-\uFFFF]+)/g) || [];
@@ -60,6 +104,8 @@ export const CastModal: React.FC<CastModalProps> = ({
     setContent('');
     setMediaUrl('');
     setShowMediaInput(false);
+    setImageError(null);
+    setImageSizeText(null);
     setCustomTags([]);
     onClose();
   };
@@ -130,27 +176,97 @@ export const CastModal: React.FC<CastModalProps> = ({
             </div>
           )}
 
-          {/* Media URL input if toggled */}
+          {/* Image error warning if file >= 100MB */}
+          {imageError && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs animate-in fade-in">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+              <span className="leading-snug">{imageError}</span>
+            </div>
+          )}
+
+          {/* Media Section: Upload file or URL */}
           {showMediaInput && (
-            <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-surface-container-low border border-border-glass-dark">
-              <label className="text-xs text-outline font-medium">Add Image URL</label>
+            <div className="flex flex-col gap-3 p-3.5 rounded-xl bg-surface-container-low border border-border-glass-dark">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-on-surface">Attach Image</span>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-surface-container text-outline">
+                    Max 100MB
+                  </span>
+                </div>
+                {mediaUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMediaUrl('');
+                      setImageSizeText(null);
+                    }}
+                    className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Remove</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Upload trigger button & hidden file input */}
               <input
-                type="url"
-                value={mediaUrl}
-                onChange={(e) => setMediaUrl(e.target.value)}
-                placeholder="https://example.com/image.jpg"
-                className="w-full p-2 text-xs rounded-lg bg-surface border border-border-glass-dark text-on-surface focus:outline-none focus:border-primary"
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
               />
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="flex-1 py-2 px-3 rounded-lg bg-surface border border-border-glass-dark hover:border-primary/50 text-xs font-medium text-on-surface flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                      <span>Validating & Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5 text-primary" />
+                      <span>Upload from Device (&lt;100MB)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Or URL input */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] text-outline">Or enter image URL directly</label>
+                <input
+                  type="url"
+                  value={mediaUrl}
+                  onChange={(e) => setMediaUrl(e.target.value)}
+                  placeholder="https://example.com/image.jpg"
+                  className="w-full p-2 text-xs rounded-lg bg-surface border border-border-glass-dark text-on-surface focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              {/* Preview */}
               {mediaUrl && (
-                <div className="mt-2 rounded-lg overflow-hidden border border-border-glass-dark max-h-40">
+                <div className="relative mt-1 rounded-lg overflow-hidden border border-border-glass-dark max-h-48 bg-surface-container flex flex-col">
                   <img
                     src={mediaUrl}
                     alt="Preview"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover max-h-48"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
                     }}
                   />
+                  {imageSizeText && (
+                    <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/70 backdrop-blur-xs text-[10px] text-white font-mono">
+                      Size: {imageSizeText} (&lt; 100MB limit)
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -205,22 +321,27 @@ export const CastModal: React.FC<CastModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowMediaInput(!showMediaInput)}
-                className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                className={`p-2 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-medium ${
                   showMediaInput ? 'bg-primary/20 text-primary' : 'text-outline hover:text-on-surface hover:bg-surface-container'
                 }`}
-                title="Attach image URL"
+                title="Attach image (<100MB)"
               >
                 <Image className="w-4 h-4" />
+                <span className="hidden sm:inline">Image (&lt;100MB)</span>
               </button>
             </div>
 
             <div className="flex items-center gap-3">
               <button
                 type="submit"
-                disabled={!content.trim()}
+                disabled={!content.trim() || isUploading}
                 className="px-5 py-2 rounded-lg bg-primary-container text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
               >
-                <Send className="w-3.5 h-3.5" />
+                {isUploading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
                 <span>Publish</span>
               </button>
             </div>

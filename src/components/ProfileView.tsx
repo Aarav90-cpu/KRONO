@@ -36,14 +36,7 @@ interface ProfileViewProps {
   onOpenAuthModal: (tab?: 'signin' | 'profile' | 'credentials' | '2fa') => void;
   viewingUser?: SuggestedUser | null;
   followedHandles?: string[];
-  onToggleFollow?: (user: {
-    id: string;
-    name: string;
-    handle: string;
-    avatar: string;
-    bio?: string;
-    isFollowing?: boolean;
-  }) => void;
+  onToggleFollow?: (user: SuggestedUser) => void;
   onUpdateCurrentUser?: (user: AuthUserProfile) => void;
 }
 

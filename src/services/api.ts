@@ -88,21 +88,120 @@ export async function bookmarkPostOnBackend(
 export async function addCommentOnBackend(
   postId: string,
   content: string,
-  author?: { name?: string; handle?: string; avatar?: string }
-): Promise<{ comment: PostComment; post: Post } | null> {
+  author?: { name?: string; handle?: string; avatar?: string },
+  userId?: string
+): Promise<{ comment: PostComment; post: Post; commentsList?: PostComment[] } | null> {
   try {
     const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, author }),
+      body: JSON.stringify({ content, author, userId }),
     });
     if (!res.ok) throw new Error(`Failed to add comment: ${res.statusText}`);
     const data = await res.json();
-    return { comment: data.comment, post: data.post };
+    return {
+      comment: data.comment,
+      post: data.post,
+      commentsList: data.commentsList || data.post?.commentsList || [],
+    };
   } catch (err) {
     console.error('Error adding comment on backend:', err);
     throw err;
   }
+}
+
+export async function fetchPostCommentsFromBackend(postId: string): Promise<PostComment[]> {
+  try {
+    const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/comments`);
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    const data = await res.json();
+    return data.comments || [];
+  } catch (err) {
+    console.warn('Failed to fetch comments for post from backend:', err);
+    return [];
+  }
+}
+
+export async function searchUsersOnBackend(
+  query: string,
+  currentUid?: string
+): Promise<any[]> {
+  try {
+    const params = new URLSearchParams();
+    if (query) params.set('q', query);
+    if (currentUid) params.set('currentUid', currentUid);
+
+    const res = await fetch(`/api/users/search?${params.toString()}`);
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    const data = await res.json();
+    return data.users || [];
+  } catch (err) {
+    console.warn('Failed to search users on backend:', err);
+    return [];
+  }
+}
+
+/**
+ * Image upload client with strict <100MB validation
+ */
+export const MAX_ALLOWED_IMAGE_SIZE_BYTES = 100 * 1024 * 1024; // 100MB
+
+export async function uploadImageToBackend(
+  fileOrDataUrl: File | string,
+  filename?: string
+): Promise<{ url: string; size: number }> {
+  let dataUrl = '';
+  let size = 0;
+  let name = filename || 'upload.png';
+
+  if (typeof fileOrDataUrl !== 'string') {
+    const file = fileOrDataUrl;
+    size = file.size;
+    name = file.name || name;
+
+    // Strict client-side validation for <100MB
+    if (size >= MAX_ALLOWED_IMAGE_SIZE_BYTES) {
+      const sizeMb = (size / (1024 * 1024)).toFixed(1);
+      throw new Error(`Image size (${sizeMb}MB) exceeds the 100MB limit. Please choose a file smaller than 100MB.`);
+    }
+
+    // Convert file to Data URL
+    dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  } else {
+    dataUrl = fileOrDataUrl;
+    const base64Index = dataUrl.indexOf('base64,');
+    if (base64Index !== -1) {
+      const base64Str = dataUrl.slice(base64Index + 7);
+      size = Math.ceil((base64Str.length * 3) / 4);
+    } else {
+      size = dataUrl.length;
+    }
+
+    if (size >= MAX_ALLOWED_IMAGE_SIZE_BYTES) {
+      const sizeMb = (size / (1024 * 1024)).toFixed(1);
+      throw new Error(`Image size (${sizeMb}MB) exceeds the 100MB limit. Please choose an image smaller than 100MB.`);
+    }
+  }
+
+  // Send to backend endpoint for server validation and storage
+  const res = await fetch('/api/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dataUrl, filename: name, size }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || `Upload failed with status ${res.status}`);
+  }
+
+  const result = await res.json();
+  return { url: result.url, size: result.size || size };
 }
 
 export async function fetchTrendingFromBackend(): Promise<TrendingTopic[]> {
