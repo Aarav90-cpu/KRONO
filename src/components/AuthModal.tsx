@@ -7,7 +7,8 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import { AuthUserProfile, TwoFactorMethod } from '../types';
-import { saveUserProfileToBackend } from '../services/api';
+import { syncUserProfileToFirestore } from '../services/firestoreService';
+import { UserAvatar } from './UserAvatar';
 import {
   X,
   Shield,
@@ -25,7 +26,6 @@ import {
   LogOut,
   QrCode,
   MapPin,
-  ShieldCheck,
 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -75,6 +75,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setFormUsername(currentUser.username.replace('@', '') || '');
       setFormAvatar(currentUser.avatar || '');
       setFormLocation(currentUser.location || '');
+      setFormBio(currentUser.bio || '');
       setNewEmail(currentUser.email || '');
       setTwoFactorEnabled(currentUser.twoFactorEnabled || false);
       setTwoFactorChoice(currentUser.twoFactorMethod || 'totp');
@@ -105,36 +106,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     onNotify('Secret Copied', 'TOTP setup key copied to clipboard.', 'info');
   };
 
-  // Instant Sign In as Aarav Ravindra Kharade
-  const handleQuickSignInAsAarav = async () => {
-    setIsLoading(true);
-    const uid = currentUser?.uid || 'google_aarav_main';
-    const profile: AuthUserProfile = {
-      uid,
-      email: 'aarav.kharade1234@gmail.com',
-      name: 'Aarav Ravindra Kharade',
-      username: '@aarav',
-      avatar:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ',
-      provider: 'google',
-      twoFactorEnabled: false,
-      twoFactorMethod: 'totp',
-      twoFactorVerified: true,
-      ageVerified: true,
-      location: formLocation || '',
-      createdAt: new Date().toISOString(),
-    };
-
-    localStorage.setItem(`krono_profile_${uid}`, JSON.stringify(profile));
-    localStorage.setItem('krono_active_uid', uid);
-    await saveUserProfileToBackend(profile);
-    onUpdateUser(profile);
-    setIsLoading(false);
-    onNotify('Signed In', 'Welcome, Aarav Ravindra Kharade! Connected to live backend.', 'success');
-    onClose();
-  };
-
-  // Handle Google Sign In
+  // Real Google Sign In
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setErrorMessage(null);
@@ -142,12 +114,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const result = await signInWithPopup(auth, googleProvider);
       const fbUser = result.user;
 
-      const email = fbUser.email || 'aarav.kharade1234@gmail.com';
-      const name = fbUser.displayName || 'Aarav Ravindra Kharade';
+      const email = fbUser.email || '';
+      const name = fbUser.displayName || 'Google Member';
+      // Real Google Profile Picture with fallback
       const avatar =
         fbUser.photoURL ||
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ';
-      const defaultUsername = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() || 'aarav';
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=059669&color=ffffff&bold=true`;
+      const defaultUsername = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() || 'user';
 
       const userProfile: AuthUserProfile = {
         uid: fbUser.uid,
@@ -164,17 +137,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         createdAt: new Date().toISOString(),
       };
 
-      // Persist locally and save to real backend
-      localStorage.setItem(`krono_profile_${fbUser.uid}`, JSON.stringify(userProfile));
+      // Persist in Firestore
+      await syncUserProfileToFirestore(userProfile);
       localStorage.setItem('krono_active_uid', fbUser.uid);
-      await saveUserProfileToBackend(userProfile);
-      onUpdateUser(userProfile);
+      localStorage.setItem(`krono_profile_${fbUser.uid}`, JSON.stringify(userProfile));
 
-      onNotify('Signed In with Google', `Welcome, ${userProfile.name}! Live backend synced.`, 'success');
+      onUpdateUser(userProfile);
+      onNotify('Signed In with Google', `Welcome, ${userProfile.name}! Connected to Firestore.`, 'success');
       onClose();
     } catch (err: any) {
-      console.warn('Google sign-in popup error, proceeding with instant session:', err);
-      await handleQuickSignInAsAarav();
+      console.error('Google sign-in error:', err);
+      const msg = err?.message || 'Google sign-in could not be completed. Please check pop-up permissions.';
+      setErrorMessage(msg);
+      onNotify('Sign-in Error', msg, 'warning');
     } finally {
       setIsLoading(false);
     }
@@ -205,10 +180,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         username: `@${cleanHandle}`,
         avatar: formAvatar.trim() || currentUser.avatar,
         location: formLocation.trim() || undefined,
+        bio: formBio.trim() || undefined,
       };
 
+      // Persist in Firestore
+      await syncUserProfileToFirestore(updatedProfile);
       localStorage.setItem(`krono_profile_${currentUser.uid}`, JSON.stringify(updatedProfile));
-      await saveUserProfileToBackend(updatedProfile);
       onUpdateUser(updatedProfile);
 
       if (auth.currentUser) {
@@ -218,7 +195,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         }).catch(() => {});
       }
 
-      onNotify('Profile Saved', 'Your profile updates have been permanently saved to the backend.', 'success');
+      onNotify('Profile Saved', 'Your profile updates have been permanently saved in Firestore.', 'success');
       onClose();
     } catch (err: any) {
       console.error('Update profile error:', err);
@@ -273,7 +250,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-bold text-on-surface">
-                {currentUser ? 'Account & Profile' : 'Sign In to KRONO'}
+                {currentUser ? 'Account & Profile' : 'Sign In with Google'}
               </h2>
               <p className="text-[11px] text-outline">
                 {currentUser
@@ -363,13 +340,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               <div className="max-w-md space-y-2">
-                <h3 className="text-xl font-bold text-on-surface">Sign In / Sign Up</h3>
+                <h3 className="text-xl font-bold text-on-surface">Sign In to KRONO</h3>
                 <p className="text-xs text-outline leading-relaxed">
-                  Connect to publish posts, join comment threads, bookmark updates, and interact with the live community.
+                  Connect your real Google account to publish posts, join discussion threads, like, bookmark, and connect with other members in Firestore.
                 </p>
               </div>
 
-              {/* Google SSO Button & Quick Sign In */}
+              {/* Real Google Auth Button */}
               <div className="w-full max-w-sm space-y-3 pt-2">
                 <button
                   type="button"
@@ -401,16 +378,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   )}
                   <span>{isLoading ? 'Connecting...' : 'Continue with Google'}</span>
                 </button>
-
-                <button
-                  type="button"
-                  onClick={handleQuickSignInAsAarav}
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary text-white font-semibold text-xs shadow-sm hover:opacity-95 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Instant Sign-In (Aarav Ravindra Kharade)</span>
-                </button>
               </div>
             </div>
           )}
@@ -419,20 +386,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {currentUser && activeTab === 'profile' && (
             <form onSubmit={handleUpdateProfile} className="space-y-4">
               <div className="flex items-center gap-4 p-4 rounded-xl bg-surface-container-low border border-border-glass-dark">
-                <img
+                <UserAvatar
                   src={formAvatar || currentUser.avatar}
-                  alt={formName || currentUser.name}
-                  className="w-16 h-16 rounded-full object-cover border-2 border-primary/30 shrink-0"
+                  name={formName || currentUser.name}
+                  size="lg"
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-on-surface">Profile Avatar</div>
+                  <div className="text-xs font-semibold text-on-surface">Profile Avatar URL</div>
                   <input
                     type="url"
                     value={formAvatar}
                     onChange={(e) => setFormAvatar(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
+                    placeholder="https://..."
                     className="w-full mt-1.5 px-3 py-1.5 rounded-lg bg-surface border border-border-glass-dark text-xs text-on-surface focus:outline-none focus:border-primary"
                   />
+                  <p className="text-[10px] text-outline mt-1">
+                    Defaults to your official Google Account profile picture.
+                  </p>
                 </div>
               </div>
 
@@ -522,79 +492,79 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               <div className="p-4 rounded-xl bg-surface-container-low border border-border-glass-dark space-y-3">
-                <span className="text-xs font-semibold text-on-surface block">Password Reset</span>
-                <p className="text-[11px] text-outline leading-relaxed">
-                  Send a password recovery email to your registered address to reset your account password.
-                </p>
-                <button
-                  type="button"
-                  onClick={handlePasswordReset}
-                  disabled={isLoading}
-                  className="px-4 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>Send Password Reset Link</span>
-                </button>
-                {passwordResetSent && (
-                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Instructions sent to your email.
-                  </p>
-                )}
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-semibold text-on-surface block">Password Reset</span>
+                    <span className="text-[11px] text-outline">
+                      Send reset instructions directly to your email.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handlePasswordReset}
+                    disabled={isLoading || passwordResetSent}
+                    className="px-3 py-1.5 rounded-lg bg-surface border border-border-glass-dark hover:bg-surface-container text-xs font-semibold text-on-surface transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {passwordResetSent ? 'Email Sent' : 'Send Reset Link'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
 
           {/* TAB 3: SECURITY (2FA) */}
           {currentUser && activeTab === 'security' && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="p-4 rounded-xl bg-surface-container-low border border-border-glass-dark space-y-3">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold text-on-surface block">Two-Factor Authentication (Optional)</span>
-                    <span className="text-[11px] text-outline">
-                      Protect your account with an authenticator app (Google Authenticator, Authy, etc.).
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-semibold text-on-surface">Two-Factor Authentication (2FA)</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
                       const next = !twoFactorEnabled;
                       setTwoFactorEnabled(next);
-                      const updated: AuthUserProfile = {
-                        ...currentUser,
-                        twoFactorEnabled: next,
-                      };
-                      localStorage.setItem(`krono_profile_${currentUser.uid}`, JSON.stringify(updated));
-                      saveUserProfileToBackend(updated);
-                      onUpdateUser(updated);
-                      onNotify(
-                        next ? '2FA Enabled' : '2FA Disabled',
-                        next ? 'Two-Factor Authentication is now enabled.' : '2FA has been disabled.',
-                        'info'
-                      );
+                      if (currentUser) {
+                        const updated = { ...currentUser, twoFactorEnabled: next, twoFactorMethod: twoFactorChoice };
+                        syncUserProfileToFirestore(updated);
+                        onUpdateUser(updated);
+                        onNotify(
+                          next ? '2FA Enabled' : '2FA Disabled',
+                          next ? 'Two-factor protection is active on your account.' : 'Two-factor protection has been disabled.',
+                          'info'
+                        );
+                      }
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
                       twoFactorEnabled
-                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                        : 'bg-surface border border-border-glass-dark text-outline hover:text-on-surface'
+                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-surface border border-border-glass-dark text-outline'
                     }`}
                   >
                     {twoFactorEnabled ? 'Enabled' : 'Disabled'}
                   </button>
                 </div>
 
+                <p className="text-[11px] text-outline leading-relaxed">
+                  Protect your account with an extra verification code upon signing in from unrecognized browsers.
+                </p>
+
                 {twoFactorEnabled && (
-                  <div className="pt-3 border-t border-border-glass-dark space-y-3">
-                    <div className="p-3 rounded-lg bg-surface border border-border-glass-dark flex items-center justify-between text-xs font-mono">
-                      <span>Secret: {totpSecret}</span>
+                  <div className="pt-2 border-t border-border-glass-dark space-y-3">
+                    <div className="p-3 rounded-lg bg-surface border border-border-glass-dark flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-mono text-on-surface">
+                        <QrCode className="w-4 h-4 text-primary" />
+                        <span>{totpSecret}</span>
+                      </div>
                       <button
                         type="button"
                         onClick={handleCopySecret}
-                        className="text-primary hover:underline text-xs flex items-center gap-1 cursor-pointer"
+                        className="p-1 rounded text-outline hover:text-on-surface cursor-pointer"
+                        title="Copy Secret"
                       >
-                        {copiedKey ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                        <span>{copiedKey ? 'Copied' : 'Copy'}</span>
+                        {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
                     </div>
                   </div>

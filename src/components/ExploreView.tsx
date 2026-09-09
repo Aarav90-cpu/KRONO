@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Flame, Users, Sparkles, Heart, CheckCircle } from 'lucide-react';
 import { Post, TrendingTopic, SuggestedUser, AuthUserProfile } from '../types';
+import { UserAvatar } from './UserAvatar';
 
 interface ExploreViewProps {
   posts?: Post[];
@@ -175,17 +176,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
                         onClick={() => onSelectUserProfile?.(user)}
                         className="hover:opacity-80 transition-opacity cursor-pointer shrink-0"
                       >
-                        {user.avatar ? (
-                          <img
-                            src={user.avatar}
-                            alt={user.name}
-                            className="w-9 h-9 rounded-full object-cover shrink-0 border border-border-glass-dark"
-                          />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-xs font-bold text-outline shrink-0">
-                            {user.name.charAt(0).toUpperCase()}
-                          </div>
-                        )}
+                        <UserAvatar src={user.avatar} name={user.name} size="sm" />
                       </button>
                       <div className="flex flex-col min-w-0">
                         <button

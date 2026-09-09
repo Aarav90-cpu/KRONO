@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FeedSubMode, FeedFilter, Post, PostComment, AuthUserProfile, TrendingTopic, SuggestedUser } from '../types';
+import { UserAvatar } from './UserAvatar';
 import {
   Clock,
   Flame,
@@ -16,6 +17,10 @@ import {
   KeyRound,
   Eye,
   ShieldCheck,
+  Repeat2,
+  Quote,
+  UserPlus,
+  UserCheck,
 } from 'lucide-react';
 
 interface FeedViewProps {
@@ -30,6 +35,8 @@ interface FeedViewProps {
   searchFilterQuery: string;
   onToggleBookmark: (postId: string) => void;
   onToggleLike: (postId: string) => void;
+  onToggleRepost: (postId: string) => void;
+  onQuotePost: (post: Post) => void;
   onAddComment: (postId: string, commentText: string) => void;
   currentUser?: AuthUserProfile | null;
   onOpenAuthModal?: (tab?: 'signin' | 'profile' | 'credentials' | '2fa') => void;
@@ -52,6 +59,8 @@ export const FeedView: React.FC<FeedViewProps> = ({
   searchFilterQuery,
   onToggleBookmark,
   onToggleLike,
+  onToggleRepost,
+  onQuotePost,
   onAddComment,
   currentUser,
   onOpenAuthModal,
@@ -66,6 +75,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
   const [showMediaInput, setShowMediaInput] = useState(false);
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+  const [activeRepostMenu, setActiveRepostMenu] = useState<string | null>(null);
 
   const handlePublish = (e: React.FormEvent) => {
     e.preventDefault();
@@ -249,11 +259,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
         ) : (
           <div className="p-4 sm:p-5 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-3">
             <div className="flex gap-3">
-              <img
-                src={currentUser.avatar}
-                alt={currentUser.name}
-                className="w-9 h-9 rounded-full object-cover shrink-0 border border-primary/30"
-              />
+              <UserAvatar src={currentUser.avatar} name={currentUser.name} size="sm" />
               <div className="flex-1 flex flex-col gap-2.5">
                 <textarea
                   value={composerText}
@@ -326,14 +332,29 @@ export const FeedView: React.FC<FeedViewProps> = ({
             sortedPosts.map((post) => {
               const isCommentsOpen = Boolean(expandedComments[post.id]);
               const commentDraft = commentInputs[post.id] || '';
+              const isAuthorFollowed = followedHandles.includes(post.author.handle);
+              const isOwnPost = currentUser && post.author.handle === currentUser.username;
 
               return (
                 <article
                   key={post.id}
-                  className="p-4 sm:p-5 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-3 transition-colors"
+                  className="p-4 sm:p-5 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-3 transition-colors relative"
                 >
+                  {/* Repost Header Banner if this is a repost */}
+                  {post.repost && (
+                    <div className="flex items-center gap-2 text-xs text-outline font-medium px-0.5 pb-1 border-b border-border-glass-dark/60">
+                      <Repeat2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>
+                        {currentUser && post.repost.reposterId === currentUser.uid
+                          ? 'You reposted'
+                          : `${post.repost.reposterName} reposted`}
+                      </span>
+                      <span className="text-[11px] text-outline font-mono">· {post.repost.timestamp}</span>
+                    </div>
+                  )}
+
                   {/* Author Header */}
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <button
                       type="button"
                       onClick={() => {
@@ -347,45 +368,114 @@ export const FeedView: React.FC<FeedViewProps> = ({
                           });
                         }
                       }}
-                      className="flex items-center gap-2.5 text-left hover:opacity-80 transition-opacity cursor-pointer group"
+                      className="flex items-center gap-2.5 text-left hover:opacity-80 transition-opacity cursor-pointer group flex-1 min-w-0"
                     >
-                      <img
-                        src={post.author.avatar}
-                        alt={post.author.name}
-                        className="w-10 h-10 rounded-full object-cover shrink-0 border border-border-glass-dark"
-                      />
-                      <div className="flex flex-col">
+                      <UserAvatar src={post.author.avatar} name={post.author.name} size="md" />
+                      <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-semibold text-on-surface group-hover:text-primary transition-colors">
+                          <span className="text-sm font-semibold text-on-surface group-hover:text-primary transition-colors truncate">
                             {post.author.name}
                           </span>
                           {post.author.verified && (
-                            <CheckCircle className="w-3.5 h-3.5 text-primary fill-primary/20" />
+                            <CheckCircle className="w-3.5 h-3.5 text-primary fill-primary/20 shrink-0" />
                           )}
                         </div>
-                        <span className="text-xs text-outline font-mono">
+                        <span className="text-xs text-outline font-mono truncate">
                           {post.author.handle} · {post.timestamp}
                         </span>
                       </div>
                     </button>
 
-                    <button
-                      onClick={() => onToggleBookmark(post.id)}
-                      className="p-1.5 rounded-lg text-outline hover:text-primary transition-colors cursor-pointer"
-                      title={post.metrics.isBookmarked ? 'Remove Bookmark' : 'Save to Bookmarks'}
-                    >
-                      <Bookmark
-                        className={`w-4 h-4 ${
-                          post.metrics.isBookmarked ? 'fill-primary text-primary' : ''
-                        }`}
-                      />
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Follow / Unfollow Button for other users */}
+                      {currentUser && !isOwnPost && onToggleFollow && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleFollow({
+                              id: post.author.id || post.author.handle,
+                              name: post.author.name,
+                              handle: post.author.handle,
+                              avatar: post.author.avatar,
+                              bio: post.author.bio || '',
+                            });
+                          }}
+                          className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors cursor-pointer flex items-center gap-1 ${
+                            isAuthorFollowed
+                              ? 'bg-surface-container border border-border-glass-dark text-outline hover:text-red-400 hover:border-red-400/30'
+                              : 'bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25'
+                          }`}
+                          title={isAuthorFollowed ? `Unfollow ${post.author.name}` : `Follow ${post.author.name}`}
+                        >
+                          {isAuthorFollowed ? (
+                            <>
+                              <UserCheck className="w-3 h-3 text-primary" />
+                              <span>Following</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="w-3 h-3" />
+                              <span>Follow</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      {/* Bookmark Icon */}
+                      <button
+                        onClick={() => onToggleBookmark(post.id)}
+                        className="p-1.5 rounded-lg text-outline hover:text-primary transition-colors cursor-pointer"
+                        title={post.metrics.isBookmarked ? 'Remove Bookmark' : 'Save to Bookmarks'}
+                      >
+                        <Bookmark
+                          className={`w-4 h-4 ${
+                            post.metrics.isBookmarked ? 'fill-primary text-primary' : ''
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Post Content */}
                   <p className="text-xs sm:text-sm text-on-surface leading-relaxed whitespace-pre-line">
                     {post.content}
                   </p>
+
+                  {/* Embedded Quoted Post Card if present */}
+                  {post.quotedPost && (
+                    <div className="p-3 rounded-xl border border-border-glass-dark bg-surface-container-low/60 flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <UserAvatar
+                          src={post.quotedPost.author.avatar}
+                          name={post.quotedPost.author.name}
+                          size="xs"
+                        />
+                        <span className="text-xs font-semibold text-on-surface">
+                          {post.quotedPost.author.name}
+                        </span>
+                        {post.quotedPost.author.verified && (
+                          <CheckCircle className="w-3 h-3 text-primary fill-primary/20 shrink-0" />
+                        )}
+                        <span className="text-[11px] text-outline font-mono">
+                          {post.quotedPost.author.handle} · {post.quotedPost.timestamp}
+                        </span>
+                      </div>
+                      <p className="text-xs text-on-surface leading-relaxed">
+                        {post.quotedPost.content}
+                      </p>
+                      {post.quotedPost.mediaUrl && (
+                        <div className="rounded-lg overflow-hidden border border-border-glass-dark max-h-36">
+                          <img
+                            src={post.quotedPost.mediaUrl}
+                            alt="Quoted attachment"
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Media Attachment */}
                   {post.mediaUrl && (
@@ -444,13 +534,62 @@ export const FeedView: React.FC<FeedViewProps> = ({
                       </span>
                     </button>
 
+                    {/* Repost & Quote Button with Dropdown */}
+                    <div className="relative">
+                      <button
+                        onClick={() => {
+                          if (!currentUser && onOpenAuthModal) {
+                            onOpenAuthModal('signin');
+                            return;
+                          }
+                          setActiveRepostMenu(activeRepostMenu === post.id ? null : post.id);
+                        }}
+                        className={`flex items-center gap-1.5 transition-colors cursor-pointer py-1 px-2 rounded-lg ${
+                          post.metrics.isReposted
+                            ? 'text-emerald-400 bg-emerald-500/10 font-semibold'
+                            : 'hover:text-emerald-400 hover:bg-emerald-500/10'
+                        }`}
+                        title="Repost or Quote"
+                      >
+                        <Repeat2 className="w-4 h-4" />
+                        <span>{post.metrics.shares}</span>
+                      </button>
+
+                      {activeRepostMenu === post.id && (
+                        <div className="absolute left-0 bottom-full mb-1.5 w-44 rounded-xl bg-surface border border-border-glass-dark p-1.5 shadow-xl z-20 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveRepostMenu(null);
+                              onToggleRepost(post.id);
+                            }}
+                            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-on-surface hover:bg-surface-container transition-colors text-left cursor-pointer"
+                          >
+                            <Repeat2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>{post.metrics.isReposted ? 'Undo Repost' : 'Repost'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveRepostMenu(null);
+                              onQuotePost(post);
+                            }}
+                            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-on-surface hover:bg-surface-container transition-colors text-left cursor-pointer"
+                          >
+                            <Quote className="w-3.5 h-3.5 text-primary" />
+                            <span>Quote Post</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
                     {/* Share Button */}
                     <button
                       onClick={() => handleShare(post.id)}
                       className="flex items-center gap-1.5 hover:text-secondary transition-colors cursor-pointer py-1 px-2 rounded-lg hover:bg-secondary/10"
+                      title="Copy Link"
                     >
                       <Share2 className="w-4 h-4" />
-                      <span>{post.metrics.shares}</span>
                     </button>
 
                     {/* Bookmark Button */}
@@ -483,11 +622,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
                               key={c.id}
                               className="p-2.5 rounded-lg bg-surface-container-low flex gap-2.5 items-start text-xs"
                             >
-                              <img
-                                src={c.author.avatar}
-                                alt={c.author.name}
-                                className="w-6 h-6 rounded-full object-cover shrink-0 mt-0.5"
-                              />
+                              <UserAvatar src={c.author.avatar} name={c.author.name} size="xs" />
                               <div className="flex-1 flex flex-col">
                                 <div className="flex items-center justify-between">
                                   <span className="font-semibold text-on-surface">
@@ -611,17 +746,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
                   className="flex items-center justify-between gap-2.5 pb-2.5 border-b border-border-glass-dark last:border-b-0 last:pb-0"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    {user.avatar ? (
-                      <img
-                        src={user.avatar}
-                        alt={user.name}
-                        className="w-8 h-8 rounded-full object-cover shrink-0"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-xs font-bold text-outline shrink-0">
-                        {user.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <UserAvatar src={user.avatar} name={user.name} size="sm" />
                     <div className="flex flex-col min-w-0">
                       <span className="text-xs font-semibold text-on-surface truncate">
                         {user.name}

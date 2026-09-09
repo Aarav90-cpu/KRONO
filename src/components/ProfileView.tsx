@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Post, AuthUserProfile, SuggestedUser } from '../types';
+import { UserAvatar } from './UserAvatar';
 import {
   Calendar,
   MapPin,
@@ -18,6 +19,7 @@ import {
   Eye,
   UserPlus,
   UserCheck,
+  Repeat2,
 } from 'lucide-react';
 import { NetworkModal } from './NetworkModal';
 
@@ -157,17 +159,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         {/* Profile Info */}
         <div className="px-6 pb-6 pt-0 relative flex flex-col gap-4">
           <div className="flex justify-between items-end -mt-12 sm:-mt-14 mb-2">
-            {displayAvatar ? (
-              <img
-                src={displayAvatar}
-                alt={displayName}
-                className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-surface object-cover shadow-md"
-              />
-            ) : (
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-surface bg-surface-container flex items-center justify-center text-xl sm:text-2xl font-bold text-outline shadow-md">
-                {displayName.charAt(0).toUpperCase()}
-              </div>
-            )}
+            <UserAvatar
+              src={displayAvatar}
+              name={displayName}
+              size="xl"
+              className="border-4 border-surface shadow-md"
+            />
             <div className="flex items-center gap-2">
               {isViewingSelf ? (
                 currentUser ? (
@@ -448,12 +445,24 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               key={post.id}
               className="p-5 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-3.5"
             >
+              {post.repost && (
+                <div className="flex items-center gap-1.5 text-xs text-outline font-medium pb-1 border-b border-border-glass-dark/60">
+                  <Repeat2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>
+                    {currentUser && post.repost.reposterId === currentUser.uid
+                      ? 'You reposted'
+                      : `${post.repost.reposterName} reposted`}
+                  </span>
+                  <span className="text-[11px] text-outline font-mono">· {post.repost.timestamp}</span>
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <img
+                  <UserAvatar
                     src={post.author.avatar}
-                    alt={post.author.name}
-                    className="w-10 h-10 rounded-full object-cover shrink-0"
+                    name={post.author.name}
+                    size="md"
                   />
                   <div className="flex flex-col">
                     <span className="text-sm font-semibold text-on-surface">
@@ -478,6 +487,37 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <p className="text-sm text-on-surface leading-relaxed whitespace-pre-line">
                 {post.content}
               </p>
+
+              {post.quotedPost && (
+                <div className="p-3 rounded-xl border border-border-glass-dark bg-surface-container-low/60 flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <UserAvatar
+                      src={post.quotedPost.author.avatar}
+                      name={post.quotedPost.author.name}
+                      size="xs"
+                    />
+                    <span className="text-xs font-semibold text-on-surface">
+                      {post.quotedPost.author.name}
+                    </span>
+                    <span className="text-[11px] text-outline font-mono">
+                      {post.quotedPost.author.handle} · {post.quotedPost.timestamp}
+                    </span>
+                  </div>
+                  <p className="text-xs text-on-surface leading-relaxed">
+                    {post.quotedPost.content}
+                  </p>
+                  {post.quotedPost.mediaUrl && (
+                    <div className="rounded-lg overflow-hidden border border-border-glass-dark max-h-36">
+                      <img
+                        src={post.quotedPost.mediaUrl}
+                        alt="Quoted attachment"
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               {post.mediaUrl && (
                 <div className="rounded-lg overflow-hidden border border-border-glass-dark max-h-96">

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ViewMode, AuthUserProfile } from '../types';
+import { UserAvatar } from './UserAvatar';
 import {
   Search,
   Plus,
@@ -215,33 +216,13 @@ export const Header: React.FC<HeaderProps> = ({
                 }}
                 className="flex items-center gap-2 rounded-full p-0.5 ring-2 ring-transparent hover:ring-primary transition-all cursor-pointer"
               >
-                {currentUser.avatar ? (
-                  <img
-                    src={currentUser.avatar}
-                    alt={currentUser.name}
-                    className="w-8 h-8 rounded-full object-cover border border-border-glass-dark"
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-primary-container text-white flex items-center justify-center font-bold text-xs">
-                    {currentUser.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
+                <UserAvatar src={currentUser.avatar} name={currentUser.name} size="sm" />
               </button>
 
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-60 rounded-xl bg-surface border border-border-glass-dark p-2 shadow-xl z-50 animate-in fade-in duration-150">
                   <div className="flex items-center gap-2.5 p-2 pb-2.5 border-b border-border-glass-dark">
-                    {currentUser.avatar ? (
-                      <img
-                        src={currentUser.avatar}
-                        alt={currentUser.name}
-                        className="w-9 h-9 rounded-full object-cover border border-primary/30"
-                      />
-                    ) : (
-                      <div className="w-9 h-9 rounded-full bg-primary-container text-white flex items-center justify-center font-bold text-xs shrink-0">
-                        {currentUser.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <UserAvatar src={currentUser.avatar} name={currentUser.name} size="sm" />
                     <div className="flex flex-col overflow-hidden">
                       <span className="text-xs font-bold text-on-surface truncate">{currentUser.name}</span>
                       <span className="text-[11px] text-outline font-mono truncate">{currentUser.username}</span>

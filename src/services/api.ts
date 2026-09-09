@@ -206,3 +206,43 @@ export async function fetchUserNetworkFromBackend(uid: string): Promise<{
     return { following: [], followers: [] };
   }
 }
+
+export async function repostPostOnBackend(
+  postId: string,
+  user: { uid: string; name: string; username: string; avatar?: string },
+  quoteContent?: string
+): Promise<{
+  success: boolean;
+  isReposted?: boolean;
+  isQuote?: boolean;
+  metrics?: {
+    likes: number;
+    comments: number;
+    shares: number;
+    isLiked?: boolean;
+    isBookmarked?: boolean;
+    isReposted?: boolean;
+  };
+  post?: Post;
+  repostItem?: Post;
+} | null> {
+  try {
+    const res = await fetch(`/api/posts/${encodeURIComponent(postId)}/repost`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: user.uid,
+        userName: user.name,
+        userHandle: user.username,
+        userAvatar: user.avatar,
+        quoteContent,
+      }),
+    });
+    if (!res.ok) throw new Error(`Repost request failed: ${res.statusText}`);
+    return await res.json();
+  } catch (err) {
+    console.error('Error in repostPostOnBackend:', err);
+    return null;
+  }
+}
+

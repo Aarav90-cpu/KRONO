@@ -3,17 +3,18 @@ import { ViewMode, FeedSubMode, FeedFilter, Post, AuthUserProfile, TrendingTopic
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import {
-  fetchPostsFromBackend,
-  createPostOnBackend,
-  likePostOnBackend,
-  bookmarkPostOnBackend,
-  addCommentOnBackend,
-  fetchTrendingFromBackend,
-  fetchSuggestedUsersFromBackend,
-  saveUserProfileToBackend,
-  fetchUserProfileFromBackend,
-  toggleFollowOnBackend,
-} from './services/api';
+  subscribeToFirestorePosts,
+  subscribeToFirestoreUsers,
+  createFirestorePost,
+  toggleFirestoreLike,
+  toggleFirestoreBookmark,
+  toggleFirestoreRepost,
+  addFirestoreComment,
+  computeTrendingFromPosts,
+  syncUserProfileToFirestore,
+  fetchUserProfileFromFirestore,
+  toggleFollowInFirestore,
+} from './services/firestoreService';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Footer } from './components/Footer';
@@ -67,35 +68,40 @@ export default function App() {
 
   // New Post Modal
   const [isCastModalOpen, setIsCastModalOpen] = useState(false);
+  const [quotingPost, setQuotingPost] = useState<Post | null>(null);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Fetch real posts, trending, and community users from backend on mount and when user session changes
+  // Real-time subscription to Firestore Posts
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadData() {
-      try {
-        const [backendPosts, backendTrending, backendUsers] = await Promise.all([
-          fetchPostsFromBackend(currentUser?.uid),
-          fetchTrendingFromBackend(),
-          fetchSuggestedUsersFromBackend(currentUser?.uid),
-        ]);
-        if (isMounted) {
-          setPosts(backendPosts || []);
-          setTrending(backendTrending || []);
-          setSuggestedUsers(backendUsers || []);
-        }
-      } catch (err) {
-        console.warn('Initial backend fetch warning:', err);
+    const unsubscribe = subscribeToFirestorePosts(
+      currentUser?.uid,
+      (fetchedPosts) => {
+        setPosts(fetchedPosts);
+        setTrending(computeTrendingFromPosts(fetchedPosts));
+      },
+      (err) => {
+        console.warn('Firestore subscription warning:', err);
       }
-    }
-
-    loadData();
+    );
 
     return () => {
-      isMounted = false;
+      unsubscribe();
+    };
+  }, [currentUser?.uid]);
+
+  // Real-time subscription to registered community users
+  useEffect(() => {
+    const unsubscribe = subscribeToFirestoreUsers(
+      currentUser?.uid,
+      (users) => {
+        setSuggestedUsers(users);
+      }
+    );
+
+    return () => {
+      unsubscribe();
     };
   }, [currentUser?.uid]);
 
@@ -108,16 +114,17 @@ export default function App() {
           let profile: AuthUserProfile;
           if (stored) {
             profile = JSON.parse(stored);
+            if (firebaseUser.photoURL) {
+              profile.avatar = firebaseUser.photoURL;
+            }
           } else {
-            const defaultUser = (firebaseUser.email?.split('@')[0] || 'aarav').toLowerCase();
+            const defaultUser = (firebaseUser.email?.split('@')[0] || 'user').toLowerCase();
             profile = {
               uid: firebaseUser.uid,
-              email: firebaseUser.email || 'aarav.kharade1234@gmail.com',
-              name: firebaseUser.displayName || 'Aarav Ravindra Kharade',
+              email: firebaseUser.email || '',
+              name: firebaseUser.displayName || 'Community Member',
               username: `@${defaultUser}`,
-              avatar:
-                firebaseUser.photoURL ||
-                'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ',
+              avatar: firebaseUser.photoURL || '',
               provider: 'google',
               twoFactorEnabled: false,
               twoFactorMethod: 'totp',
@@ -125,20 +132,30 @@ export default function App() {
               ageVerified: true,
               location: '',
               createdAt: new Date().toISOString(),
+              followers: [],
+              following: [],
+              followersCount: 0,
+              followingCount: 0,
             };
           }
-          // Fetch latest backend profile to sync followers, following, and custom details
-          const backendProfile = await fetchUserProfileFromBackend(firebaseUser.uid);
-          if (backendProfile) {
-            profile = { ...profile, ...backendProfile };
+
+          // Fetch latest profile from Firestore to keep followers and data updated
+          const firestoreProfile = await fetchUserProfileFromFirestore(firebaseUser.uid);
+          if (firestoreProfile) {
+            profile = {
+              ...profile,
+              ...firestoreProfile,
+              avatar: firebaseUser.photoURL || firestoreProfile.avatar || profile.avatar,
+            };
           }
+
           setCurrentUser(profile);
           if (Array.isArray(profile.following)) {
             setFollowedHandles(profile.following);
           }
           localStorage.setItem('krono_active_uid', firebaseUser.uid);
           localStorage.setItem(`krono_profile_${firebaseUser.uid}`, JSON.stringify(profile));
-          saveUserProfileToBackend(profile);
+          await syncUserProfileToFirestore(profile);
         } catch (err) {
           console.error('Failed to sync auth state', err);
         }
@@ -203,62 +220,89 @@ export default function App() {
     addToast('Signed Out', 'You have been signed out of your account.', 'info');
   };
 
-  const handleAddPost = async (postData: Partial<Post>) => {
-    const activeName = currentUser?.name || 'Aarav Ravindra Kharade';
-    const activeHandle = currentUser?.username || '@aarav';
-    const activeAvatar =
-      currentUser?.avatar ||
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ';
+  const handleAddPost = async (postData: Partial<Post>, quoteOriginalPostId?: string) => {
+    if (!currentUser) {
+      setAuthModalInitialTab('signin');
+      setIsAuthModalOpen(true);
+      addToast('Sign In Required', 'Please sign in to publish a post.', 'warning');
+      return;
+    }
+
+    // If quoting a post, handle via quote/repost in Firestore
+    if (quoteOriginalPostId) {
+      try {
+        await toggleFirestoreRepost(
+          quoteOriginalPostId,
+          {
+            uid: currentUser.uid,
+            name: currentUser.name,
+            username: currentUser.username,
+            avatar: currentUser.avatar || '',
+          },
+          postData.content
+        );
+        addToast('Quote Post Published', 'Your commentary is now live in Firestore.', 'success');
+        setQuotingPost(null);
+        return;
+      } catch (err) {
+        console.error('Failed to publish quote post:', err);
+        addToast('Error', 'Failed to publish quote post.', 'warning');
+        return;
+      }
+    }
 
     try {
-      const created = await createPostOnBackend(
-        {
-          content: postData.content || '',
-          mediaUrl: postData.mediaUrl,
-          tags: postData.tags || ['#Community'],
-        },
-        {
-          name: activeName,
-          handle: activeHandle,
-          avatar: activeAvatar,
-          bio: currentUser?.email,
-        },
-        currentUser?.uid
-      );
-
-      if (created) {
-        setPosts((prev) => [created, ...prev]);
-        addToast('Post Published', 'Your update is now live on the backend feed.', 'success');
-        // Refresh trending topics
-        fetchTrendingFromBackend().then((t) => setTrending(t));
-      }
-    } catch (err) {
-      console.error('Failed to publish post to backend:', err);
-      // Fallback local post
-      const fallbackPost: Post = {
-        id: `post-${Date.now()}`,
-        author: {
-          name: activeName,
-          handle: activeHandle,
-          avatar: activeAvatar,
-          verified: true,
-        },
-        timestamp: 'Just now',
+      await createFirestorePost({
+        authorId: currentUser.uid,
+        authorName: currentUser.name,
+        authorHandle: currentUser.username,
+        authorAvatar: currentUser.avatar || '',
+        authorVerified: true,
         content: postData.content || '',
         mediaUrl: postData.mediaUrl,
-        tags: postData.tags || [],
-        metrics: {
-          likes: 0,
-          comments: 0,
-          shares: 0,
-          isLiked: false,
-          isBookmarked: false,
-        },
-        commentsList: [],
-      };
-      setPosts((prev) => [fallbackPost, ...prev]);
-      addToast('Post Published', 'Your update is now live.', 'success');
+        tags: postData.tags || ['#Community'],
+      });
+      addToast('Post Published', 'Your post is now live in Firestore.', 'success');
+    } catch (err) {
+      console.error('Failed to publish post to Firestore:', err);
+      addToast('Error', 'Failed to publish post to Firestore.', 'warning');
     }
+  };
+
+  const handleToggleRepost = async (postId: string) => {
+    if (!currentUser) {
+      setAuthModalInitialTab('signin');
+      setIsAuthModalOpen(true);
+      addToast('Sign In Required', 'Please sign in to repost.', 'warning');
+      return;
+    }
+
+    try {
+      const res = await toggleFirestoreRepost(postId, {
+        uid: currentUser.uid,
+        name: currentUser.name,
+        username: currentUser.username,
+        avatar: currentUser.avatar || '',
+      });
+      if (res?.isReposted) {
+        addToast('Reposted', 'Post shared to your profile and community feed.', 'success');
+      } else {
+        addToast('Repost Removed', 'Post removed from your reposts.', 'info');
+      }
+    } catch (err) {
+      console.error('Failed to toggle repost:', err);
+    }
+  };
+
+  const handleQuotePost = (post: Post) => {
+    if (!currentUser) {
+      setAuthModalInitialTab('signin');
+      setIsAuthModalOpen(true);
+      addToast('Sign In Required', 'Please sign in to quote posts.', 'warning');
+      return;
+    }
+    setQuotingPost(post);
+    setIsCastModalOpen(true);
   };
 
   const handleToggleFollow = async (user: SuggestedUser) => {
@@ -280,168 +324,99 @@ export default function App() {
         : prev.filter((h) => h !== user.handle && h !== user.id)
     );
 
-    setSuggestedUsers((prev) =>
-      prev.map((u) =>
-        u.id === user.id || u.handle.toLowerCase() === user.handle.toLowerCase()
-          ? {
-              ...u,
-              isFollowing: nextFollowing,
-              followersCount: Math.max(0, (u.followersCount || 0) + (nextFollowing ? 1 : -1)),
-            }
-          : u
-      )
-    );
-
-    setCurrentUser((prev) => {
-      if (!prev) return prev;
-      const curFollowing = Array.isArray(prev.following) ? prev.following : [];
-      const updated = nextFollowing
-        ? [...curFollowing.filter((h) => h !== user.handle && h !== user.id), user.handle]
-        : curFollowing.filter((h) => h !== user.handle && h !== user.id);
-      return {
-        ...prev,
-        following: updated,
-        followingCount: updated.length,
-      };
-    });
-
     addToast(
       nextFollowing ? 'Followed' : 'Unfollowed',
       nextFollowing ? `You are now following ${user.name}` : `You unfollowed ${user.name}`,
       'info'
     );
 
-    // Call real backend endpoint
-    const res = await toggleFollowOnBackend(
-      currentUser.uid,
-      user.id || user.handle,
-      currentUser.username,
-      currentUser.name,
-      user.name,
-      user.avatar
-    );
+    try {
+      const res = await toggleFollowInFirestore(
+        currentUser.uid,
+        user.id || user.handle
+      );
 
-    if (res && res.success) {
-      setCurrentUser((prev) => {
-        if (!prev) return prev;
-        const updated = {
-          ...prev,
-          following: res.followingList,
-          followingCount: res.currentFollowingCount,
-        };
-        localStorage.setItem(`krono_profile_${prev.uid}`, JSON.stringify(updated));
-        return updated;
-      });
-      // Synchronize suggested users
-      fetchSuggestedUsersFromBackend(currentUser.uid).then((users) => {
-        if (users && users.length > 0) setSuggestedUsers(users);
-      });
+      if (res) {
+        setFollowedHandles(res.followedHandles);
+        setCurrentUser((prev) => {
+          if (!prev) return prev;
+          const updated = {
+            ...prev,
+            following: res.followedHandles,
+            followingCount: res.followedHandles.length,
+          };
+          localStorage.setItem(`krono_profile_${prev.uid}`, JSON.stringify(updated));
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to toggle follow:', err);
     }
   };
 
   const handleToggleLike = async (postId: string) => {
-    // Optimistic UI update
-    setPosts((prev) =>
-      prev.map((p) => {
-        if (p.id === postId) {
-          const nextLiked = !p.metrics.isLiked;
-          return {
-            ...p,
-            metrics: {
-              ...p.metrics,
-              likes: nextLiked ? p.metrics.likes + 1 : Math.max(0, p.metrics.likes - 1),
-              isLiked: nextLiked,
-            },
-          };
-        }
-        return p;
-      })
-    );
-
-    // Sync with backend
-    await likePostOnBackend(postId, currentUser?.uid);
-  };
-
-  const handleToggleBookmark = async (postId: string) => {
-    setPosts((prev) =>
-      prev.map((p) => {
-        if (p.id === postId) {
-          const nextBookmarked = !p.metrics.isBookmarked;
-          addToast(
-            nextBookmarked ? 'Saved to Bookmarks' : 'Removed from Bookmarks',
-            nextBookmarked ? 'You can view this post in your Bookmarks tab.' : 'Post un-saved.',
-            'info'
-          );
-          return {
-            ...p,
-            metrics: {
-              ...p.metrics,
-              isBookmarked: nextBookmarked,
-            },
-          };
-        }
-        return p;
-      })
-    );
-
-    // Sync with backend
-    await bookmarkPostOnBackend(postId, currentUser?.uid);
-  };
-
-  const handleAddComment = async (postId: string, commentText: string) => {
-    const activeName = currentUser?.name || 'Aarav Ravindra Kharade';
-    const activeHandle = currentUser?.username || '@aarav';
-    const activeAvatar =
-      currentUser?.avatar ||
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ';
+    if (!currentUser) {
+      setAuthModalInitialTab('signin');
+      setIsAuthModalOpen(true);
+      addToast('Sign In Required', 'Please sign in to like posts.', 'warning');
+      return;
+    }
 
     try {
-      const res = await addCommentOnBackend(postId, commentText, {
-        name: activeName,
-        handle: activeHandle,
-        avatar: activeAvatar,
-      });
-
-      if (res?.post) {
-        setPosts((prev) => prev.map((p) => (p.id === postId ? res.post : p)));
-        addToast('Reply Posted', 'Your reply is now live on the backend thread.', 'success');
-      }
+      await toggleFirestoreLike(postId, currentUser.uid);
     } catch (err) {
-      console.error('Failed to add comment to backend:', err);
-      // Fallback local update
-      setPosts((prev) =>
-        prev.map((p) => {
-          if (p.id === postId) {
-            const newComment = {
-              id: `c-${Date.now()}`,
-              author: {
-                name: activeName,
-                handle: activeHandle,
-                avatar: activeAvatar,
-              },
-              timestamp: 'Just now',
-              content: commentText,
-            };
-            return {
-              ...p,
-              metrics: {
-                ...p.metrics,
-                comments: p.metrics.comments + 1,
-              },
-              commentsList: [...(p.commentsList || []), newComment],
-            };
-          }
-          return p;
-        })
-      );
-      addToast('Reply Posted', 'Your reply has been posted.', 'success');
+      console.error('Failed to toggle like:', err);
     }
   };
 
-  const activeUserHandle = currentUser?.username || '@aarav';
+  const handleToggleBookmark = async (postId: string) => {
+    if (!currentUser) {
+      setAuthModalInitialTab('signin');
+      setIsAuthModalOpen(true);
+      addToast('Sign In Required', 'Please sign in to bookmark posts.', 'warning');
+      return;
+    }
+
+    try {
+      const res = await toggleFirestoreBookmark(postId, currentUser.uid);
+      addToast(
+        res.isBookmarked ? 'Saved to Bookmarks' : 'Removed from Bookmarks',
+        res.isBookmarked ? 'You can view this post in your Bookmarks tab.' : 'Post un-saved.',
+        'info'
+      );
+    } catch (err) {
+      console.error('Failed to toggle bookmark:', err);
+    }
+  };
+
+  const handleAddComment = async (postId: string, commentText: string) => {
+    if (!currentUser) {
+      setAuthModalInitialTab('signin');
+      setIsAuthModalOpen(true);
+      addToast('Sign In Required', 'Please sign in to reply.', 'warning');
+      return;
+    }
+
+    try {
+      await addFirestoreComment(postId, {
+        author: {
+          name: currentUser.name,
+          handle: currentUser.username,
+          avatar: currentUser.avatar || '',
+        },
+        content: commentText,
+      });
+      addToast('Reply Posted', 'Your reply is now live.', 'success');
+    } catch (err) {
+      console.error('Failed to add comment to Firestore:', err);
+      addToast('Error', 'Failed to submit comment.', 'warning');
+    }
+  };
+
+  const activeUserHandle = currentUser?.username || '';
   const bookmarkedPosts = posts.filter((p) => p.metrics.isBookmarked);
   const userPosts = posts.filter(
-    (p) => p.author.handle === activeUserHandle || p.author.handle === '@aarav'
+    (p) => (currentUser && p.author.id === currentUser.uid) || (activeUserHandle && p.author.handle.toLowerCase() === activeUserHandle.toLowerCase())
   );
 
   const handleViewChange = (view: ViewMode) => {
@@ -518,6 +493,8 @@ export default function App() {
               suggestedUsers={suggestedUsers}
               followedHandles={followedHandles}
               onToggleFollow={handleToggleFollow}
+              onToggleRepost={handleToggleRepost}
+              onQuotePost={handleQuotePost}
               onSelectUserProfile={(user) => {
                 setViewingProfileUser(user);
                 setCurrentView('profile');
@@ -582,7 +559,7 @@ export default function App() {
               onToggleFollow={handleToggleFollow}
               onUpdateCurrentUser={(updated) => {
                 setCurrentUser(updated);
-                saveUserProfileToBackend(updated);
+                syncUserProfileToFirestore(updated);
                 localStorage.setItem(`krono_profile_${updated.uid}`, JSON.stringify(updated));
               }}
               onOpenAuthModal={(tab) => {
@@ -600,9 +577,13 @@ export default function App() {
       {/* New Post Modal */}
       <CastModal
         isOpen={isCastModalOpen}
-        onClose={() => setIsCastModalOpen(false)}
+        onClose={() => {
+          setIsCastModalOpen(false);
+          setQuotingPost(null);
+        }}
         onSubmitPost={handleAddPost}
         currentUser={currentUser}
+        quotingPost={quotingPost}
       />
 
       {/* Full Authentication Modal */}

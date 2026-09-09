@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { X, Users, UserCheck, UserPlus, ShieldCheck } from 'lucide-react';
-import { fetchUserNetworkFromBackend } from '../services/api';
+import { fetchUserNetworkFromFirestore } from '../services/firestoreService';
 import { AuthUserProfile } from '../types';
+import { UserAvatar } from './UserAvatar';
 
 interface NetworkUser {
   id: string;
@@ -56,7 +57,7 @@ export const NetworkModal: React.FC<NetworkModalProps> = ({
     let isMounted = true;
     setIsLoading(true);
 
-    fetchUserNetworkFromBackend(targetUid)
+    fetchUserNetworkFromFirestore(targetUid)
       .then((data) => {
         if (isMounted) {
           setFollowingList(data.following || []);
@@ -154,17 +155,7 @@ export const NetworkModal: React.FC<NetworkModalProps> = ({
               return (
                 <div key={user.handle} className="pt-3 first:pt-0 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    {user.avatar ? (
-                      <img
-                        src={user.avatar}
-                        alt={user.name}
-                        className="w-9 h-9 rounded-full object-cover shrink-0 border border-border-glass-dark"
-                      />
-                    ) : (
-                      <div className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center font-bold text-xs text-outline shrink-0">
-                        {user.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <UserAvatar src={user.avatar} name={user.name} size="sm" />
                     <div className="flex flex-col min-w-0">
                       <span className="text-xs font-bold text-on-surface truncate flex items-center gap-1">
                         {user.name}

@@ -35,6 +35,30 @@ export interface Post {
     shares: number;
     isLiked?: boolean;
     isBookmarked?: boolean;
+    isReposted?: boolean;
+  };
+  likedBy?: string[];
+  bookmarkedBy?: string[];
+  repostedBy?: string[];
+  repost?: {
+    originalPostId: string;
+    reposterId: string;
+    reposterName: string;
+    reposterHandle: string;
+    timestamp: string;
+  };
+  quotedPost?: {
+    id: string;
+    author: {
+      id?: string;
+      name: string;
+      handle: string;
+      avatar: string;
+      verified?: boolean;
+    };
+    content: string;
+    mediaUrl?: string;
+    timestamp: string;
   };
   commentsList?: PostComment[];
 }

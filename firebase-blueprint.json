@@ -1,0 +1,211 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public and account profile of a registered user",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "User identifier matching auth.uid"
+        },
+        "name": {
+          "type": "string",
+          "description": "User display name",
+          "maxLength": 80
+        },
+        "username": {
+          "type": "string",
+          "description": "User handle formatted with leading @",
+          "maxLength": 50
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "maxLength": 120
+        },
+        "avatar": {
+          "type": "string",
+          "description": "Avatar image URL",
+          "maxLength": 1000
+        },
+        "bio": {
+          "type": "string",
+          "description": "User biography",
+          "maxLength": 280
+        },
+        "location": {
+          "type": "string",
+          "description": "User location",
+          "maxLength": 100
+        },
+        "followers": {
+          "type": "array",
+          "description": "List of follower user handles or IDs"
+        },
+        "following": {
+          "type": "array",
+          "description": "List of handles or IDs the user follows"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of account creation"
+        }
+      },
+      "required": ["uid", "name", "username", "createdAt"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "A social post published by a user",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique post identifier"
+        },
+        "authorId": {
+          "type": "string",
+          "description": "UID of the post author"
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Author display name",
+          "maxLength": 80
+        },
+        "authorHandle": {
+          "type": "string",
+          "description": "Author user handle",
+          "maxLength": 50
+        },
+        "authorAvatar": {
+          "type": "string",
+          "description": "Author profile avatar URL",
+          "maxLength": 1000
+        },
+        "authorVerified": {
+          "type": "boolean",
+          "description": "Verification status"
+        },
+        "content": {
+          "type": "string",
+          "description": "Post body text",
+          "maxLength": 2000
+        },
+        "mediaUrl": {
+          "type": "string",
+          "description": "Optional image URL attached to the post",
+          "maxLength": 1000
+        },
+        "tags": {
+          "type": "array",
+          "description": "List of hashtags"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Human readable timestamp"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp or server timestamp"
+        },
+        "likesCount": {
+          "type": "number",
+          "description": "Number of likes"
+        },
+        "commentsCount": {
+          "type": "number",
+          "description": "Number of comments"
+        },
+        "sharesCount": {
+          "type": "number",
+          "description": "Number of reposts and quotes"
+        },
+        "likedBy": {
+          "type": "array",
+          "description": "UIDs of users who liked this post"
+        },
+        "bookmarkedBy": {
+          "type": "array",
+          "description": "UIDs of users who bookmarked this post"
+        },
+        "repostedBy": {
+          "type": "array",
+          "description": "UIDs of users who reposted this post"
+        },
+        "quotedPost": {
+          "type": "object",
+          "description": "Original post data when quoting"
+        },
+        "repost": {
+          "type": "object",
+          "description": "Repost metadata when displaying in feed"
+        }
+      },
+      "required": ["id", "authorId", "authorName", "authorHandle", "content", "createdAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "A comment on a post",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Comment ID"
+        },
+        "postId": {
+          "type": "string",
+          "description": "Parent post ID"
+        },
+        "authorId": {
+          "type": "string",
+          "description": "UID of comment author"
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Author display name",
+          "maxLength": 80
+        },
+        "authorHandle": {
+          "type": "string",
+          "description": "Author handle",
+          "maxLength": 50
+        },
+        "authorAvatar": {
+          "type": "string",
+          "description": "Author avatar URL",
+          "maxLength": 1000
+        },
+        "content": {
+          "type": "string",
+          "description": "Comment text",
+          "maxLength": 1000
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp"
+        }
+      },
+      "required": ["id", "postId", "authorId", "authorName", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "User profiles indexed by auth UID"
+    },
+    "/posts/{postId}": {
+      "schema": {
+        "$ref": "#/entities/Post"
+      },
+      "description": "Community posts"
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "schema": {
+        "$ref": "#/entities/Comment"
+      },
+      "description": "Comments on a post"
+    }
+  }
+}

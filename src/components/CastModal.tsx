@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { X, Image, Hash, Send } from 'lucide-react';
 import { Post, AuthUserProfile } from '../types';
+import { UserAvatar } from './UserAvatar';
 
 interface CastModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmitPost: (post: Partial<Post>) => void;
+  onSubmitPost: (post: Partial<Post>, quoteOriginalPostId?: string) => void;
   currentUser?: AuthUserProfile | null;
+  quotingPost?: Post | null;
 }
 
 export const CastModal: React.FC<CastModalProps> = ({
@@ -14,6 +16,7 @@ export const CastModal: React.FC<CastModalProps> = ({
   onClose,
   onSubmitPost,
   currentUser,
+  quotingPost,
 }) => {
   const [content, setContent] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
@@ -45,11 +48,14 @@ export const CastModal: React.FC<CastModalProps> = ({
     const textTags = content.match(/#([a-zA-Z0-9_\u0080-\uFFFF]+)/g) || [];
     const allTags = Array.from(new Set([...customTags, ...textTags]));
 
-    onSubmitPost({
-      content: content.trim(),
-      mediaUrl: mediaUrl.trim() || undefined,
-      tags: allTags.length > 0 ? allTags : undefined,
-    });
+    onSubmitPost(
+      {
+        content: content.trim(),
+        mediaUrl: mediaUrl.trim() || undefined,
+        tags: allTags.length > 0 ? allTags : undefined,
+      },
+      quotingPost ? quotingPost.id : undefined
+    );
 
     setContent('');
     setMediaUrl('');
@@ -63,10 +69,12 @@ export const CastModal: React.FC<CastModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-lg rounded-2xl bg-surface border border-border-glass-dark p-5 shadow-2xl flex flex-col gap-4">
+      <div className="relative w-full max-w-lg rounded-2xl bg-surface border border-border-glass-dark p-5 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-border-glass-dark">
-          <h2 className="text-sm font-bold text-on-surface">Create New Post</h2>
+          <h2 className="text-sm font-bold text-on-surface">
+            {quotingPost ? 'Quote Post' : 'Create New Post'}
+          </h2>
           <button
             onClick={onClose}
             className="p-1 rounded-md text-outline hover:text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
@@ -78,28 +86,49 @@ export const CastModal: React.FC<CastModalProps> = ({
         {/* Composer */}
         <form onSubmit={handlePublish} className="flex flex-col gap-3">
           <div className="flex gap-3">
-            {displayAvatar ? (
-              <img
-                src={displayAvatar}
-                alt={displayName}
-                className="w-10 h-10 rounded-full object-cover shrink-0"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center font-bold text-sm text-outline shrink-0">
-                {displayName.charAt(0).toUpperCase()}
-              </div>
-            )}
+            <UserAvatar src={displayAvatar} name={displayName} size="md" />
             <div className="flex-1">
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                rows={4}
+                rows={3}
                 autoFocus
-                placeholder="What's happening? Share thoughts, updates, or links..."
+                placeholder={quotingPost ? 'Add your commentary on this post...' : "What's happening? Share thoughts, updates, or links..."}
                 className="w-full bg-transparent border-0 text-sm text-on-surface placeholder:text-outline focus:outline-none resize-none"
               />
             </div>
           </div>
+
+          {/* Quoting Post Embedded Preview */}
+          {quotingPost && (
+            <div className="p-3.5 rounded-xl bg-surface-container-low border border-border-glass-dark flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <UserAvatar
+                  src={quotingPost.author.avatar}
+                  name={quotingPost.author.name}
+                  size="xs"
+                />
+                <span className="text-xs font-semibold text-on-surface">
+                  {quotingPost.author.name}
+                </span>
+                <span className="text-[11px] text-outline font-mono">
+                  {quotingPost.author.handle}
+                </span>
+              </div>
+              <p className="text-xs text-on-surface line-clamp-3 leading-relaxed">
+                {quotingPost.content}
+              </p>
+              {quotingPost.mediaUrl && (
+                <div className="mt-1 rounded-lg overflow-hidden max-h-28 border border-border-glass-dark">
+                  <img
+                    src={quotingPost.mediaUrl}
+                    alt="Quoted attachment"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Media URL input if toggled */}
           {showMediaInput && (

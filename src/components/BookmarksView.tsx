@@ -1,5 +1,6 @@
 import React from 'react';
 import { Post } from '../types';
+import { UserAvatar } from './UserAvatar';
 import { Bookmark, MessageSquare, Heart, Share2, ArrowLeft } from 'lucide-react';
 
 interface BookmarksViewProps {
@@ -66,10 +67,10 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({
               {/* Author */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <img
+                  <UserAvatar
                     src={post.author.avatar}
-                    alt={post.author.name}
-                    className="w-10 h-10 rounded-full object-cover shrink-0"
+                    name={post.author.name}
+                    size="md"
                   />
                   <div className="flex flex-col">
                     <div className="flex items-center gap-1.5">
