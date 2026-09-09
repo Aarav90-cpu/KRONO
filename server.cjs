@@ -1,3 +1,4 @@
+"use strict";
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -29,270 +30,20 @@ var import_express = __toESM(require("express"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_fs = __toESM(require("fs"), 1);
 var import_vite = require("vite");
-var PORT = 3e3;
+var import_dotenv = __toESM(require("dotenv"), 1);
+import_dotenv.default.config();
+function validateEnvironment() {
+  const requiredVars = ["GEMINI_API_KEY"];
+  const missingVars = requiredVars.filter((varName) => !process.env[varName]);
+  if (missingVars.length > 0) {
+    console.warn(`Warning: Missing environment variables: ${missingVars.join(", ")}`);
+    console.warn("Some features may not work correctly. Please check your .env file.");
+  }
+}
+var PORT = parseInt(process.env.PORT || "3000", 10);
 var DB_FILE = import_path.default.join(process.cwd(), "data", "db.json");
-var INITIAL_USERS = {
-  user_elena: {
-    uid: "user_elena",
-    name: "Elena Rostova",
-    username: "@elena_dev",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-    bio: "Principal Web Architect & Open Source maintainer. Building responsive, accessible cloud apps.",
-    followers: ["@marcus_v", "@drsarah", "@kenji_tech"],
-    following: ["@marcus_v", "@priya_design"],
-    createdAt: new Date(Date.now() - 30 * 864e5).toISOString()
-  },
-  user_marcus: {
-    uid: "user_marcus",
-    name: "Marcus Vance",
-    username: "@marcus_v",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-    bio: "Urban architecture photographer & digital creative director. Chasing golden hour geometry.",
-    followers: ["@elena_dev", "@priya_design"],
-    following: ["@elena_dev", "@drsarah", "@kenji_tech"],
-    createdAt: new Date(Date.now() - 25 * 864e5).toISOString()
-  },
-  user_sarah: {
-    uid: "user_sarah",
-    name: "Dr. Sarah Lin",
-    username: "@drsarah",
-    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
-    bio: "AI researcher & cognitive systems fellow. Exploring autonomous agent loops & grounded verification.",
-    followers: ["@elena_dev", "@marcus_v", "@kenji_tech", "@priya_design"],
-    following: ["@kenji_tech"],
-    createdAt: new Date(Date.now() - 20 * 864e5).toISOString()
-  },
-  user_kenji: {
-    uid: "user_kenji",
-    name: "Kenji Sato",
-    username: "@kenji_tech",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
-    bio: "Robotics engineer & IoT tinkerer. Low-latency micro-controllers & real-time telemetry systems.",
-    followers: ["@drsarah", "@marcus_v"],
-    following: ["@drsarah", "@elena_dev"],
-    createdAt: new Date(Date.now() - 15 * 864e5).toISOString()
-  },
-  user_priya: {
-    uid: "user_priya",
-    name: "Priya Sharma",
-    username: "@priya_design",
-    avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80",
-    bio: "Design Systems Lead & Motion Specialist. Obsessed with typography, spacing math & micro-delight.",
-    followers: ["@elena_dev", "@marcus_v"],
-    following: ["@elena_dev", "@drsarah"],
-    createdAt: new Date(Date.now() - 10 * 864e5).toISOString()
-  }
-};
-var INITIAL_SEED_POSTS = [
-  {
-    id: "post-seed-1",
-    author: {
-      id: "user_elena",
-      name: "Elena Rostova",
-      handle: "@elena_dev",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-      verified: true,
-      bio: "Principal Web Architect & Open Source maintainer. Building responsive, accessible cloud apps."
-    },
-    timestamp: "2h ago",
-    content: "Just finished migrating our design system tokens to Tailwind v4. The build performance improvements are astronomical \u2014 CSS generation dropped from 1.4s to under 180ms! \u{1F680} Anyone else tested the new CSS-first syntax?",
-    mediaUrl: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=1200&auto=format&fit=crop&q=80",
-    tags: ["#webdev", "#frontend", "#tailwind"],
-    metrics: {
-      likes: 42,
-      comments: 2,
-      shares: 12,
-      isLiked: false,
-      isBookmarked: false,
-      isReposted: false
-    },
-    likedBy: [],
-    bookmarkedBy: [],
-    repostedBy: [],
-    commentsList: [
-      {
-        id: "c-seed-1-1",
-        author: {
-          name: "Kenji Sato",
-          handle: "@kenji_tech",
-          avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
-        },
-        timestamp: "1h ago",
-        content: "That sub-200ms compilation is a game changer for large monorepos! Did you run into any postcss plugin conflicts?"
-      },
-      {
-        id: "c-seed-1-2",
-        author: {
-          name: "Priya Sharma",
-          handle: "@priya_design",
-          avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80"
-        },
-        timestamp: "45m ago",
-        content: "The font token cascade is so much cleaner now. Loving the new container query syntax too!"
-      }
-    ]
-  },
-  {
-    id: "post-seed-2",
-    author: {
-      id: "user_marcus",
-      name: "Marcus Vance",
-      handle: "@marcus_v",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-      verified: true,
-      bio: "Urban architecture photographer & digital creative director. Chasing golden hour geometry."
-    },
-    timestamp: "4h ago",
-    content: "Golden hour reflections through the glass atrium in downtown Kyoto. Minimalist structural geometry never fails to inspire my UI layout work. \u{1F4F7}\u2728",
-    mediaUrl: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1200&auto=format&fit=crop&q=80",
-    tags: ["#architecture", "#photography", "#design"],
-    metrics: {
-      likes: 68,
-      comments: 1,
-      shares: 15,
-      isLiked: false,
-      isBookmarked: false,
-      isReposted: false
-    },
-    likedBy: [],
-    bookmarkedBy: [],
-    repostedBy: [],
-    commentsList: [
-      {
-        id: "c-seed-2-1",
-        author: {
-          name: "Elena Rostova",
-          handle: "@elena_dev",
-          avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
-        },
-        timestamp: "3h ago",
-        content: "The lighting on the second tier fa\xE7ade is stunning Marcus! What lens did you shoot this with?"
-      }
-    ]
-  },
-  {
-    id: "post-seed-3",
-    author: {
-      id: "user_sarah",
-      name: "Dr. Sarah Lin",
-      handle: "@drsarah",
-      avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
-      verified: true,
-      bio: "AI researcher & cognitive systems fellow. Exploring autonomous agent loops & grounded verification."
-    },
-    timestamp: "6h ago",
-    content: "Published our new preprint on autonomous reasoning loops and agent verification! Instead of single-shot generation, multi-stage self-checking reduces hallucination rates by 34%. Link in thread! \u{1F9E0}\u{1F50D}",
-    tags: ["#ai", "#research", "#agents"],
-    metrics: {
-      likes: 95,
-      comments: 2,
-      shares: 31,
-      isLiked: false,
-      isBookmarked: false,
-      isReposted: false
-    },
-    likedBy: [],
-    bookmarkedBy: [],
-    repostedBy: [],
-    commentsList: [
-      {
-        id: "c-seed-3-1",
-        author: {
-          name: "Kenji Sato",
-          handle: "@kenji_tech",
-          avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
-        },
-        timestamp: "5h ago",
-        content: "Incredible findings Sarah. The self-correction graphs in section 3.2 are particularly promising for robotic pathing."
-      },
-      {
-        id: "c-seed-3-2",
-        author: {
-          name: "Elena Rostova",
-          handle: "@elena_dev",
-          avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
-        },
-        timestamp: "4h ago",
-        content: "Bookmarking this to read with the team tomorrow morning!"
-      }
-    ]
-  },
-  {
-    id: "post-seed-4",
-    author: {
-      id: "user_kenji",
-      name: "Kenji Sato",
-      handle: "@kenji_tech",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
-      verified: true,
-      bio: "Robotics engineer & IoT tinkerer. Low-latency micro-controllers & real-time telemetry systems."
-    },
-    timestamp: "9h ago",
-    content: "Calibrating the 6-axis mechanical arm\u2019s haptic feedback controllers today. Sub-millimeter precision achieved with low-latency WebSockets telemetry. \u{1F916} Ready for live testing!",
-    mediaUrl: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=1200&auto=format&fit=crop&q=80",
-    tags: ["#robotics", "#engineering", "#hardware"],
-    metrics: {
-      likes: 53,
-      comments: 1,
-      shares: 9,
-      isLiked: false,
-      isBookmarked: false,
-      isReposted: false
-    },
-    likedBy: [],
-    bookmarkedBy: [],
-    repostedBy: [],
-    commentsList: [
-      {
-        id: "c-seed-4-1",
-        author: {
-          name: "Marcus Vance",
-          handle: "@marcus_v",
-          avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
-        },
-        timestamp: "7h ago",
-        content: "That hardware chassis looks sleek! Love the matte black finish."
-      }
-    ]
-  },
-  {
-    id: "post-seed-5",
-    author: {
-      id: "user_priya",
-      name: "Priya Sharma",
-      handle: "@priya_design",
-      avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80",
-      verified: true,
-      bio: "Design Systems Lead & Motion Specialist. Obsessed with typography, spacing math & micro-delight."
-    },
-    timestamp: "12h ago",
-    content: "Micro-interactions are the silent heroes of user delight. Notice how a 200ms spring physics curve feels so much more organic than a linear transition. What is your favorite easing curve? \u2728",
-    tags: ["#design", "#uiux", "#motion"],
-    metrics: {
-      likes: 37,
-      comments: 1,
-      shares: 7,
-      isLiked: false,
-      isBookmarked: false,
-      isReposted: false
-    },
-    likedBy: [],
-    bookmarkedBy: [],
-    repostedBy: [],
-    commentsList: [
-      {
-        id: "c-seed-5-1",
-        author: {
-          name: "Elena Rostova",
-          handle: "@elena_dev",
-          avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
-        },
-        timestamp: "10h ago",
-        content: "Spring easing with damping ratio of 0.7 is my absolute sweet spot for popovers and dialogs!"
-      }
-    ]
-  }
-];
+var INITIAL_USERS = {};
+var INITIAL_SEED_POSTS = [];
 function readDb() {
   try {
     if (!import_fs.default.existsSync(DB_FILE)) {
@@ -341,10 +92,49 @@ function writeDb(db) {
 }
 async function startServer() {
   const app = (0, import_express.default)();
-  app.use(import_express.default.json());
+  app.use(import_express.default.json({ limit: "100mb" }));
+  app.use(import_express.default.urlencoded({ limit: "100mb", extended: true }));
   readDb();
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+  });
+  const MAX_IMAGE_SIZE_BYTES = 100 * 1024 * 1024;
+  app.post("/api/upload", (req, res) => {
+    try {
+      const { dataUrl, filename, size } = req.body;
+      if (!dataUrl) {
+        return res.status(400).json({ success: false, error: "No image data provided" });
+      }
+      let byteLength = typeof size === "number" ? size : 0;
+      if (!byteLength && typeof dataUrl === "string") {
+        const base64Index = dataUrl.indexOf("base64,");
+        if (base64Index !== -1) {
+          const base64Str = dataUrl.slice(base64Index + 7);
+          byteLength = Math.ceil(base64Str.length * 3 / 4);
+        } else {
+          byteLength = Buffer.byteLength(dataUrl, "utf8");
+        }
+      }
+      if (byteLength >= MAX_IMAGE_SIZE_BYTES) {
+        const sizeMb = (byteLength / (1024 * 1024)).toFixed(1);
+        return res.status(413).json({
+          success: false,
+          error: `Image size exceeds the 100MB limit (provided file is ${sizeMb}MB). Please upload an image under 100MB.`,
+          maxSizeBytes: MAX_IMAGE_SIZE_BYTES,
+          providedSizeBytes: byteLength
+        });
+      }
+      return res.json({
+        success: true,
+        url: dataUrl,
+        size: byteLength,
+        filename: filename || "upload.png",
+        message: "Image uploaded and verified (<100MB limit)."
+      });
+    } catch (err) {
+      console.error("Upload handling error:", err);
+      return res.status(500).json({ success: false, error: "Failed to process image upload." });
+    }
   });
   app.get("/api/posts", (req, res) => {
     const db = readDb();
@@ -574,25 +364,44 @@ async function startServer() {
       });
     }
   });
+  app.get("/api/posts/:id/comments", (req, res) => {
+    const postId = req.params.id;
+    const db = readDb();
+    const post = db.posts.find((p) => p.id === postId);
+    if (!post) {
+      return res.status(404).json({ success: false, error: "Post not found" });
+    }
+    const commentsList = Array.isArray(post.commentsList) ? post.commentsList : [];
+    res.json({
+      success: true,
+      comments: commentsList,
+      commentsCount: commentsList.length
+    });
+  });
   app.post("/api/posts/:id/comments", (req, res) => {
     const postId = req.params.id;
-    const { content, author } = req.body;
+    const { content, author, userId } = req.body;
     if (!content || !content.trim()) {
-      return res.status(400).json({ error: "Comment content is required" });
+      return res.status(400).json({ success: false, error: "Comment content is required" });
     }
     const db = readDb();
     const postIndex = db.posts.findIndex((p) => p.id === postId);
     if (postIndex === -1) {
-      return res.status(404).json({ error: "Post not found" });
+      return res.status(404).json({ success: false, error: "Post not found" });
     }
     const post = db.posts[postIndex];
-    if (!post.commentsList) post.commentsList = [];
+    if (!Array.isArray(post.commentsList)) {
+      post.commentsList = [];
+    }
+    const rawHandle = author?.handle || author?.username || "@member";
+    const cleanHandle = rawHandle.startsWith("@") ? rawHandle : `@${rawHandle}`;
+    const userFromDb = userId && db.users[userId] ? db.users[userId] : null;
     const newComment = {
       id: `c-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       author: {
-        name: author?.name || "Aarav Ravindra Kharade",
-        handle: author?.handle || author?.username || "@aarav",
-        avatar: author?.avatar || "https://lh3.googleusercontent.com/aida-public/AB6AXuCEt5GHk5diRXjDuXfuNJqdkFMhzVx27k6PANeFkWxWMxpzoO2gsuHLEP11Ol2HsXOdYRUoPx_xOpwwF8H09PytALYUHAZ3M-WcBA1fmDRiccSg3u2DgoyJt_37S8i26VwXqilbBhom1ksf-LdPw1NHFttiwbb5Mke8ndbzw72GFjL5sbvjXC6w_XHiLROG9LfPMIAjzKvLhbpsWmWwEN9Int_QqJuijAFp4bm7cAGhegHJU5DnG6-srQ"
+        name: userFromDb?.name || author?.name || "Community Member",
+        handle: userFromDb?.username ? `@${userFromDb.username.replace("@", "")}` : cleanHandle,
+        avatar: userFromDb?.avatar || author?.avatar || ""
       },
       timestamp: "Just now",
       content: content.trim()
@@ -600,7 +409,13 @@ async function startServer() {
     post.commentsList.push(newComment);
     post.metrics.comments = post.commentsList.length;
     writeDb(db);
-    res.status(201).json({ success: true, comment: newComment, post });
+    res.status(201).json({
+      success: true,
+      comment: newComment,
+      commentsCount: post.commentsList.length,
+      commentsList: post.commentsList,
+      post
+    });
   });
   app.get("/api/trending", (_req, res) => {
     const db = readDb();
@@ -619,9 +434,81 @@ async function startServer() {
     }));
     res.json({ success: true, trending });
   });
+  app.get("/api/users/search", (req, res) => {
+    const query = (req.query.q || req.query.query || "").trim().toLowerCase();
+    const currentUid = req.query.currentUid;
+    const db = readDb();
+    const currentUser = currentUid ? db.users[currentUid] : null;
+    const currentFollowing = Array.isArray(currentUser?.following) ? currentUser.following : [];
+    const allUsersMap = /* @__PURE__ */ new Map();
+    for (const user of Object.values(db.users || {})) {
+      if (user && user.uid) {
+        const u = user;
+        const key = (u.username || u.handle || u.uid).toLowerCase();
+        allUsersMap.set(key, {
+          id: u.uid,
+          name: u.name || "Member",
+          handle: u.username || u.handle || `@user_${u.uid.slice(0, 5)}`,
+          email: u.email || "",
+          avatar: u.avatar || "",
+          bio: u.bio || "",
+          location: u.location || "",
+          followers: Array.isArray(u.followers) ? u.followers : [],
+          following: Array.isArray(u.following) ? u.following : [],
+          createdAt: u.createdAt || ""
+        });
+      }
+    }
+    for (const post of db.posts || []) {
+      if (post.author?.handle) {
+        const key = post.author.handle.toLowerCase();
+        if (!allUsersMap.has(key)) {
+          allUsersMap.set(key, {
+            id: post.author.id || post.author.handle,
+            name: post.author.name || post.author.handle.replace("@", ""),
+            handle: post.author.handle,
+            email: "",
+            avatar: post.author.avatar || "",
+            bio: post.author.bio || "",
+            location: "",
+            followers: [],
+            following: [],
+            createdAt: post.timestamp || ""
+          });
+        }
+      }
+    }
+    let usersList = Array.from(allUsersMap.values()).map((u) => {
+      const isFollowing = currentFollowing.includes(u.id) || currentFollowing.includes(u.handle);
+      return {
+        id: u.id,
+        name: u.name,
+        handle: u.handle,
+        email: u.email,
+        avatar: u.avatar,
+        bio: u.bio,
+        location: u.location,
+        followersCount: u.followers.length,
+        followingCount: u.following.length,
+        isFollowing
+      };
+    });
+    if (query) {
+      const cleanQ = query.startsWith("@") ? query.slice(1) : query;
+      usersList = usersList.filter((u) => {
+        const nameMatch = u.name.toLowerCase().includes(cleanQ);
+        const handleMatch = u.handle.toLowerCase().includes(cleanQ);
+        const bioMatch = u.bio.toLowerCase().includes(cleanQ);
+        const emailMatch = u.email ? u.email.toLowerCase().includes(cleanQ) : false;
+        return nameMatch || handleMatch || bioMatch || emailMatch;
+      });
+    }
+    res.json({ success: true, count: usersList.length, users: usersList });
+  });
   app.get("/api/users", (req, res) => {
     const db = readDb();
     const currentUid = req.query.currentUid;
+    const searchQuery = (req.query.search || req.query.q || "").trim().toLowerCase();
     const currentUser = currentUid ? db.users[currentUid] : null;
     const currentFollowing = Array.isArray(currentUser?.following) ? currentUser.following : [];
     const authorsMap = /* @__PURE__ */ new Map();
@@ -653,6 +540,7 @@ async function startServer() {
           id: u.uid,
           name: u.name || "Member",
           handle: u.username || u.handle || `@user_${u.uid.slice(0, 5)}`,
+          email: u.email || "",
           avatar: u.avatar || "",
           bio: u.bio || "",
           followers: Array.isArray(u.followers) ? u.followers : [],
@@ -660,7 +548,7 @@ async function startServer() {
         });
       }
     }
-    const usersList = Array.from(allUsersMap.values()).filter((u) => {
+    let usersList = Array.from(allUsersMap.values()).filter((u) => {
       if (!currentUid) return true;
       if (u.id === currentUid) return false;
       if (currentUser && (currentUser.username?.toLowerCase() === u.handle.toLowerCase() || currentUser.handle?.toLowerCase() === u.handle.toLowerCase())) {
@@ -673,6 +561,7 @@ async function startServer() {
         id: u.id,
         name: u.name,
         handle: u.handle,
+        email: u.email,
         avatar: u.avatar,
         bio: u.bio,
         followersCount: u.followers.length,
@@ -680,6 +569,16 @@ async function startServer() {
         isFollowing
       };
     });
+    if (searchQuery) {
+      const cleanQ = searchQuery.startsWith("@") ? searchQuery.slice(1) : searchQuery;
+      usersList = usersList.filter((u) => {
+        const nameMatch = u.name.toLowerCase().includes(cleanQ);
+        const handleMatch = u.handle.toLowerCase().includes(cleanQ);
+        const bioMatch = u.bio.toLowerCase().includes(cleanQ);
+        const emailMatch = u.email ? u.email.toLowerCase().includes(cleanQ) : false;
+        return nameMatch || handleMatch || bioMatch || emailMatch;
+      });
+    }
     res.json({ success: true, users: usersList });
   });
   app.post("/api/users/follow", (req, res) => {
@@ -872,5 +771,6 @@ async function startServer() {
     console.log(`Krono backend server running on http://0.0.0.0:${PORT}`);
   });
 }
+validateEnvironment();
 startServer();
 //# sourceMappingURL=server.cjs.map
