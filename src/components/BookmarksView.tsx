@@ -8,6 +8,7 @@ interface BookmarksViewProps {
   onToggleLike: (postId: string) => void;
   onToggleBookmark: (postId: string) => void;
   onBackToFeed: () => void;
+  onNotify?: (title: string, message: string, type?: 'success' | 'info' | 'warning') => void;
 }
 
 export const BookmarksView: React.FC<BookmarksViewProps> = ({
@@ -15,6 +16,7 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({
   onToggleLike,
   onToggleBookmark,
   onBackToFeed,
+  onNotify,
 }) => {
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 pb-12">
@@ -145,10 +147,21 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({
                   <span>{post.metrics.comments}</span>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const shareUrl = `https://krono-social.duckdns.org/post/${post.id}`;
+                    navigator.clipboard.writeText(shareUrl);
+                    if (onNotify) {
+                      onNotify('Link Copied', 'Post URL copied to clipboard.', 'success');
+                    }
+                  }}
+                  className="flex items-center gap-1.5 hover:text-primary transition-colors cursor-pointer"
+                  title="Share post"
+                >
                   <Share2 className="w-4 h-4" />
                   <span>{post.metrics.shares}</span>
-                </div>
+                </button>
               </div>
             </article>
           ))}

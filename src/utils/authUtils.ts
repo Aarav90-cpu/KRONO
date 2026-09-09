@@ -6,7 +6,6 @@
 export const MIN_REQUIRED_AGE = 13;
 
 export const POPULAR_LOCATIONS = [
-  'Tokyo, Japan',
   'San Francisco, USA',
   'New York, USA',
   'London, UK',

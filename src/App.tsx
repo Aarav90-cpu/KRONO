@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ViewMode, FeedSubMode, FeedFilter, Post, AuthUserProfile, TrendingTopic, SuggestedUser } from './types';
 import { auth } from './firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, updateProfile } from 'firebase/auth';
 import {
   subscribeToFirestorePosts,
   subscribeToFirestoreUsers,
@@ -532,6 +532,7 @@ export default function App() {
               onToggleLike={handleToggleLike}
               onToggleBookmark={handleToggleBookmark}
               onBackToFeed={() => setCurrentView('feed')}
+              onNotify={addToast}
             />
           )}
 
@@ -561,6 +562,12 @@ export default function App() {
                 setCurrentUser(updated);
                 syncUserProfileToFirestore(updated);
                 localStorage.setItem(`krono_profile_${updated.uid}`, JSON.stringify(updated));
+                if (auth.currentUser && updated.avatar) {
+                  updateProfile(auth.currentUser, {
+                    displayName: updated.name,
+                    photoURL: updated.avatar,
+                  }).catch(() => {});
+                }
               }}
               onOpenAuthModal={(tab) => {
                 setAuthModalInitialTab(tab || 'profile');

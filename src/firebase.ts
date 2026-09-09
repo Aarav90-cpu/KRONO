@@ -16,7 +16,7 @@ googleProvider.setCustomParameters({
   prompt: 'select_account',
 });
 
-// Standard Firestore Error Handling conforming to Firebase Skill guidelines
+// Standard Firestore Error Handling
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
