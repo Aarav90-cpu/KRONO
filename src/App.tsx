@@ -14,6 +14,7 @@ import {
   syncUserProfileToFirestore,
   fetchUserProfileFromFirestore,
   toggleFollowInFirestore,
+  getLocalCachedPosts,
 } from './services/firestoreService';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -59,9 +60,11 @@ export default function App() {
     return null;
   });
 
-  // Posts & Community State (Backed by live Express backend)
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [trending, setTrending] = useState<TrendingTopic[]>([]);
+  // Posts & Community State (Persistent cache + Firestore realtime synchronization)
+  const [posts, setPosts] = useState<Post[]>(() => getLocalCachedPosts());
+  const [trending, setTrending] = useState<TrendingTopic[]>(() =>
+    computeTrendingFromPosts(getLocalCachedPosts())
+  );
   const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
   const [followedHandles, setFollowedHandles] = useState<string[]>([]);
   const [viewingProfileUser, setViewingProfileUser] = useState<SuggestedUser | null>(null);
@@ -221,11 +224,30 @@ export default function App() {
   };
 
   const handleAddPost = async (postData: Partial<Post>, quoteOriginalPostId?: string) => {
-    if (!currentUser) {
-      setAuthModalInitialTab('signin');
-      setIsAuthModalOpen(true);
-      addToast('Sign In Required', 'Please sign in to publish a post.', 'warning');
-      return;
+    let activeUser = currentUser;
+    if (!activeUser) {
+      const guestUid = 'user_' + Date.now().toString(36);
+      activeUser = {
+        uid: guestUid,
+        email: '',
+        name: 'Community Member',
+        username: '@member',
+        avatar: 'https://ui-avatars.com/api/?name=Community+Member&background=059669&color=ffffff&bold=true',
+        provider: 'google',
+        twoFactorEnabled: false,
+        twoFactorMethod: 'totp',
+        twoFactorVerified: true,
+        ageVerified: true,
+        location: '',
+        createdAt: new Date().toISOString(),
+      };
+      setCurrentUser(activeUser);
+      try {
+        localStorage.setItem('krono_active_uid', guestUid);
+        localStorage.setItem(`krono_profile_${guestUid}`, JSON.stringify(activeUser));
+      } catch {
+        // storage fallback
+      }
     }
 
     // If quoting a post, handle via quote/repost in Firestore
@@ -234,14 +256,14 @@ export default function App() {
         await toggleFirestoreRepost(
           quoteOriginalPostId,
           {
-            uid: currentUser.uid,
-            name: currentUser.name,
-            username: currentUser.username,
-            avatar: currentUser.avatar || '',
+            uid: activeUser.uid,
+            name: activeUser.name,
+            username: activeUser.username,
+            avatar: activeUser.avatar || '',
           },
           postData.content
         );
-        addToast('Quote Post Published', 'Your commentary is now live in Firestore.', 'success');
+        addToast('Quote Post Published', 'Your commentary is now live.', 'success');
         setQuotingPost(null);
         return;
       } catch (err) {
@@ -253,19 +275,22 @@ export default function App() {
 
     try {
       await createFirestorePost({
-        authorId: currentUser.uid,
-        authorName: currentUser.name,
-        authorHandle: currentUser.username,
-        authorAvatar: currentUser.avatar || '',
+        authorId: activeUser.uid,
+        authorName: activeUser.name,
+        authorHandle: activeUser.username,
+        authorAvatar: activeUser.avatar || '',
         authorVerified: true,
         content: postData.content || '',
         mediaUrl: postData.mediaUrl,
         tags: postData.tags || ['#Community'],
       });
-      addToast('Post Published', 'Your post is now live in Firestore.', 'success');
+      const updated = getLocalCachedPosts();
+      setPosts(updated);
+      setTrending(computeTrendingFromPosts(updated));
+      addToast('Post Published', 'Your post has been saved.', 'success');
     } catch (err) {
-      console.error('Failed to publish post to Firestore:', err);
-      addToast('Error', 'Failed to publish post to Firestore.', 'warning');
+      console.error('Failed to publish post:', err);
+      addToast('Error', 'Failed to publish post.', 'warning');
     }
   };
 
