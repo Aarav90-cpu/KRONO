@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { FeedSubMode, FeedFilter, Post, AuthUserProfile, TrendingTopic, SuggestedUser } from '../types';
 import { UserAvatar } from './UserAvatar';
+import { PostMedia } from './PostMedia';
+import { FormattedContent } from './FormattedContent';
+import { extractPostImage } from '../utils/mediaUtils';
 import {
   Clock,
   Flame,
@@ -10,8 +13,9 @@ import {
   Bookmark,
   Send,
   Image,
+  Upload,
+  X,
   CheckCircle,
-  Lock,
   KeyRound,
   Eye,
   Repeat2,
@@ -73,17 +77,67 @@ export const FeedView: React.FC<FeedViewProps> = ({
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [activeRepostMenu, setActiveRepostMenu] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      onNotify('Invalid File', 'Please select an image file (PNG, JPG, WebP, GIF).', 'warning');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setComposerMediaUrl(dataUrl);
+      setShowMediaInput(true);
+      onNotify('Photo Attached', 'Image ready to publish with your post.', 'info');
+    };
+    reader.readAsDataURL(file);
+    if (e.target) e.target.value = '';
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          const reader = new FileReader();
+          reader.onload = () => {
+            setComposerMediaUrl(reader.result as string);
+            setShowMediaInput(true);
+            onNotify('Photo Pasted', 'Pasted image attached to post.', 'info');
+          };
+          reader.readAsDataURL(file);
+          return;
+        }
+      }
+    }
+  };
 
   const handlePublish = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!composerText.trim()) return;
+    if (!composerText.trim() && !composerMediaUrl.trim()) return;
 
     // Extract hashtags dynamically from text if present
     const extractedTags = composerText.match(/#([a-zA-Z0-9_\u0080-\uFFFF]+)/g) || [];
 
+    // Auto-detect image from text if composerMediaUrl is empty
+    let finalMedia = composerMediaUrl.trim() || undefined;
+    if (!finalMedia) {
+      const detected = extractPostImage(composerText);
+      if (detected) finalMedia = detected;
+    }
+
     onAddPost({
       content: composerText.trim(),
-      mediaUrl: composerMediaUrl.trim() || undefined,
+      mediaUrl: finalMedia,
       tags: extractedTags,
     });
 
@@ -113,7 +167,6 @@ export const FeedView: React.FC<FeedViewProps> = ({
     onAddComment(postId, text);
     setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
     setExpandedComments((prev) => ({ ...prev, [postId]: true }));
-    onNotify('Comment Added', 'Your reply has been posted.', 'success');
   };
 
   // Filter posts based on search and feed filter
@@ -136,7 +189,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
     }
 
     if (feedFilter === 'media') {
-      return Boolean(p.mediaUrl);
+      return Boolean(p.mediaUrl || extractPostImage(p.content, p.mediaUrl));
     }
 
     return true;
@@ -234,91 +287,142 @@ export const FeedView: React.FC<FeedViewProps> = ({
           </div>
         )}
 
-        {/* Post Composer Card (or Guest Sign-In Prompt) */}
-        {!currentUser ? (
-          <div className="p-4 sm:p-5 rounded-xl bg-surface border border-border-glass-dark flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-surface-container-low border border-border-glass-dark flex items-center justify-center text-outline shrink-0">
-                <Lock className="w-4 h-4 text-primary" />
-              </div>
-              <div className="text-xs">
-                <span className="font-semibold text-on-surface block">Want to join the conversation?</span>
-                <span className="text-outline text-[11px]">Sign in with Google (13+ only) to publish posts and interact.</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => onOpenAuthModal?.('signin')}
-              className="px-3.5 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:opacity-90 transition-opacity cursor-pointer shrink-0"
-            >
-              Sign In to Post
-            </button>
-          </div>
-        ) : (
-          <div className="p-4 sm:p-5 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-3">
-            <div className="flex gap-3">
-              <UserAvatar src={currentUser.avatar} name={currentUser.name} size="sm" />
-              <div className="flex-1 flex flex-col gap-2.5">
-                <textarea
-                  value={composerText}
-                  onChange={(e) => setComposerText(e.target.value)}
-                  rows={2}
-                  placeholder={`What's on your mind, ${currentUser.name.split(' ')[0]}?`}
-                  className="w-full bg-surface-container-low border border-border-glass-dark rounded-lg p-3 text-xs sm:text-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary/50 resize-none transition-colors"
-                />
+        {/* Post Composer Card */}
+        <div className="p-4 sm:p-5 rounded-xl bg-surface border border-border-glass-dark flex flex-col gap-3 shadow-xs">
+          <div className="flex gap-3 items-start">
+            <UserAvatar
+              src={currentUser?.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=krono_tester'}
+              name={currentUser?.name || 'Krono Member'}
+              size="sm"
+            />
+            <div className="flex-1 flex flex-col gap-2.5">
+              <textarea
+                value={composerText}
+                onChange={(e) => {
+                  setComposerText(e.target.value);
+                  // Auto-detect image URL in text if mediaUrl not set yet
+                  if (!composerMediaUrl) {
+                    const detected = extractPostImage(e.target.value);
+                    if (detected) {
+                      setComposerMediaUrl(detected);
+                      setShowMediaInput(true);
+                    }
+                  }
+                }}
+                onPaste={handlePaste}
+                rows={2}
+                placeholder={
+                  currentUser
+                    ? `What's on your mind, ${currentUser.name.split(' ')[0]}?`
+                    : "What's happening? (Drop a thought or paste an image link...)"
+                }
+                className="w-full bg-surface-container-low border border-border-glass-dark rounded-lg p-3 text-xs sm:text-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary/50 resize-none transition-colors"
+              />
 
-                {showMediaInput && (
-                  <div className="flex gap-2">
-                    <input
-                      type="url"
-                      value={composerMediaUrl}
-                      onChange={(e) => setComposerMediaUrl(e.target.value)}
-                      placeholder="Paste image URL (https://...)"
-                      className="flex-1 px-3 py-1.5 bg-surface-container-low border border-border-glass-dark rounded-lg text-xs text-on-surface focus:outline-none focus:border-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowMediaInput(false)}
-                      className="text-xs text-outline px-2 hover:text-on-surface"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                )}
+              {/* Hidden File Input for Image Upload */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
 
-                <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-outline pt-1">
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowMediaInput(!showMediaInput)}
-                      className={`flex items-center gap-1 transition-colors cursor-pointer ${
-                        showMediaInput ? 'text-primary' : 'hover:text-on-surface'
-                      }`}
-                    >
-                      <Image className="w-4 h-4" />
-                      <span>Photo</span>
-                    </button>
-                  </div>
+              {/* Image Attachment Preview */}
+              {composerMediaUrl && (
+                <div className="relative rounded-xl overflow-hidden border border-border-glass-dark bg-surface-container-low max-h-60 w-full flex items-center justify-center group">
+                  <img
+                    src={composerMediaUrl}
+                    alt="Attachment preview"
+                    className="w-full h-auto max-h-60 object-cover"
+                    referrerPolicy="no-referrer"
+                    onError={() => {
+                      onNotify('Preview Issue', 'The image link could not be loaded directly.', 'warning');
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setComposerMediaUrl('');
+                      setShowMediaInput(false);
+                    }}
+                    className="absolute top-2 right-2 p-1.5 rounded-full bg-black/70 hover:bg-black text-white shadow-md cursor-pointer transition-colors"
+                    title="Remove attached photo"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
 
-                  <div className="flex items-center gap-3">
-                    <span className="text-[11px] text-outline">
-                      {280 - composerText.length}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handlePublish}
-                      disabled={!composerText.trim()}
-                      className="px-4 py-1.5 rounded-lg bg-primary-container text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Post</span>
-                    </button>
-                  </div>
+              {showMediaInput && !composerMediaUrl && (
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={composerMediaUrl}
+                    onChange={(e) => setComposerMediaUrl(e.target.value)}
+                    placeholder="Paste image URL (https://... or .png/.jpg/.gif)"
+                    className="flex-1 px-3 py-1.5 bg-surface-container-low border border-border-glass-dark rounded-lg text-xs text-on-surface focus:outline-none focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-2.5 py-1.5 bg-surface-container border border-border-glass-dark rounded-lg text-xs text-on-surface flex items-center gap-1.5 hover:border-primary cursor-pointer transition-colors"
+                    title="Upload image from computer"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-primary" />
+                    <span>Browse</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowMediaInput(false)}
+                    className="text-xs text-outline px-2 hover:text-on-surface cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-outline pt-1">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowMediaInput(!showMediaInput)}
+                    className={`flex items-center gap-1 transition-colors cursor-pointer ${
+                      showMediaInput || composerMediaUrl ? 'text-primary font-medium' : 'hover:text-on-surface'
+                    }`}
+                  >
+                    <Image className="w-4 h-4" />
+                    <span>{composerMediaUrl ? 'Photo Attached' : 'Add Photo'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1 hover:text-on-surface transition-colors cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-outline" />
+                    <span>Upload</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-outline">
+                    {280 - composerText.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handlePublish}
+                    disabled={!composerText.trim() && !composerMediaUrl.trim()}
+                    className="px-4 py-1.5 rounded-lg bg-primary-container text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Post</span>
+                  </button>
                 </div>
               </div>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Post List */}
         <div className="flex flex-col gap-3.5">
@@ -435,10 +539,12 @@ export const FeedView: React.FC<FeedViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Post Content */}
-                  <p className="text-xs sm:text-sm text-on-surface leading-relaxed whitespace-pre-line">
-                    {post.content}
-                  </p>
+                  {/* Post Content with clickable links, hashtags, and mentions */}
+                  <FormattedContent
+                    content={post.content}
+                    onTagClick={onSelectTag}
+                    className="text-xs sm:text-sm text-on-surface leading-relaxed"
+                  />
 
                   {/* Embedded Quoted Post Card if present */}
                   {post.quotedPost && (
@@ -459,33 +565,34 @@ export const FeedView: React.FC<FeedViewProps> = ({
                           {post.quotedPost.author.handle} · {post.quotedPost.timestamp}
                         </span>
                       </div>
-                      <p className="text-xs text-on-surface leading-relaxed">
-                        {post.quotedPost.content}
-                      </p>
-                      {post.quotedPost.mediaUrl && (
-                        <div className="rounded-lg overflow-hidden border border-border-glass-dark max-h-36">
-                          <img
-                            src={post.quotedPost.mediaUrl}
+                      <FormattedContent
+                        content={post.quotedPost.content}
+                        onTagClick={onSelectTag}
+                        className="text-xs text-on-surface leading-relaxed"
+                      />
+                      {(() => {
+                        const quotedImg = extractPostImage(post.quotedPost.content, post.quotedPost.mediaUrl);
+                        return quotedImg ? (
+                          <PostMedia
+                            src={quotedImg}
                             alt="Quoted attachment"
-                            className="w-full h-full object-cover"
-                            loading="lazy"
+                            maxHeightClass="max-h-48"
                           />
-                        </div>
-                      )}
+                        ) : null;
+                      })()}
                     </div>
                   )}
 
-                  {/* Media Attachment */}
-                  {post.mediaUrl && (
-                    <div className="rounded-xl overflow-hidden border border-border-glass-dark max-h-[420px] bg-surface-container-low">
-                      <img
-                        src={post.mediaUrl}
-                        alt="Post attachment"
-                        className="w-full h-auto object-cover hover:scale-[1.01] transition-transform duration-200"
-                        loading="lazy"
+                  {/* Media Attachment (supports attached media or in-text image link) */}
+                  {(() => {
+                    const postImg = extractPostImage(post.content, post.mediaUrl);
+                    return postImg ? (
+                      <PostMedia
+                        src={postImg}
+                        alt={`Attachment by ${post.author.name}`}
                       />
-                    </div>
-                  )}
+                    ) : null;
+                  })()}
 
                   {/* Hashtags */}
                   {post.tags && post.tags.length > 0 && (
@@ -645,22 +752,8 @@ export const FeedView: React.FC<FeedViewProps> = ({
                         </div>
                       )}
 
-                      {/* Comment Input or Guest Guard */}
-                      {!currentUser ? (
-                        <div className="p-3 rounded-lg bg-surface-container-low border border-border-glass-dark flex items-center justify-between gap-3 text-xs">
-                          <div className="flex items-center gap-2 text-outline">
-                            <Lock className="w-3.5 h-3.5 text-primary shrink-0" />
-                            <span>Sign in with Google (13+) to post comments.</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => onOpenAuthModal?.('signin')}
-                            className="px-3 py-1 bg-primary text-white text-[11px] font-semibold rounded-lg hover:opacity-90 cursor-pointer shrink-0"
-                          >
-                            Sign In
-                          </button>
-                        </div>
-                      ) : (
+                      {/* Comment Input */}
+                      <div className="flex flex-col gap-1.5">
                         <div className="flex gap-2">
                           <input
                             type="text"
@@ -674,19 +767,24 @@ export const FeedView: React.FC<FeedViewProps> = ({
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') handleSendComment(post.id);
                             }}
-                            placeholder="Write a reply..."
+                            placeholder={currentUser ? 'Write a reply...' : 'Write a reply as Krono Member...'}
                             className="flex-1 px-3 py-1.5 bg-surface-container-low border border-border-glass-dark rounded-lg text-xs text-on-surface focus:outline-none focus:border-primary"
                           />
                           <button
                             type="button"
                             onClick={() => handleSendComment(post.id)}
                             disabled={!commentDraft.trim()}
-                            className="px-3 py-1.5 bg-primary-container text-white text-xs font-semibold rounded-lg hover:opacity-90 disabled:opacity-40 cursor-pointer"
+                            className="px-3.5 py-1.5 bg-primary-container text-white text-xs font-semibold rounded-lg hover:opacity-90 disabled:opacity-40 cursor-pointer transition-opacity"
                           >
                             Reply
                           </button>
                         </div>
-                      )}
+                        {!currentUser && (
+                          <span className="text-[10px] text-outline px-1">
+                            Posting as guest. <button type="button" onClick={() => onOpenAuthModal?.('signin')} className="text-primary hover:underline cursor-pointer">Sign In</button> to link your Google profile.
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </article>

@@ -25,6 +25,9 @@ import {
 } from 'lucide-react';
 import { NetworkModal } from './NetworkModal';
 import { ChangePfpModal } from './ChangePfpModal';
+import { PostMedia } from './PostMedia';
+import { FormattedContent } from './FormattedContent';
+import { extractPostImage } from '../utils/mediaUtils';
 
 interface ProfileViewProps {
   userPosts: Post[];
@@ -126,7 +129,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     activeTab === 'posts'
       ? userPosts
       : activeTab === 'media'
-      ? userPosts.filter((p) => Boolean(p.mediaUrl))
+      ? userPosts.filter((p) => Boolean(p.mediaUrl || extractPostImage(p.content, p.mediaUrl)))
       : userPosts.filter((p) => p.metrics.isLiked);
 
   return (
@@ -553,9 +556,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </button>
               </div>
 
-              <p className="text-sm text-on-surface leading-relaxed whitespace-pre-line">
-                {post.content}
-              </p>
+              <FormattedContent
+                content={post.content}
+                className="text-sm text-on-surface leading-relaxed"
+              />
 
               {post.quotedPost && (
                 <div className="p-3 rounded-xl border border-border-glass-dark bg-surface-container-low/60 flex flex-col gap-2">
@@ -572,31 +576,32 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       {post.quotedPost.author.handle} · {post.quotedPost.timestamp}
                     </span>
                   </div>
-                  <p className="text-xs text-on-surface leading-relaxed">
-                    {post.quotedPost.content}
-                  </p>
-                  {post.quotedPost.mediaUrl && (
-                    <div className="rounded-lg overflow-hidden border border-border-glass-dark max-h-36">
-                      <img
-                        src={post.quotedPost.mediaUrl}
+                  <FormattedContent
+                    content={post.quotedPost.content}
+                    className="text-xs text-on-surface leading-relaxed"
+                  />
+                  {(() => {
+                    const quotedImg = extractPostImage(post.quotedPost.content, post.quotedPost.mediaUrl);
+                    return quotedImg ? (
+                      <PostMedia
+                        src={quotedImg}
                         alt="Quoted attachment"
-                        className="w-full h-full object-cover"
-                        loading="lazy"
+                        maxHeightClass="max-h-48"
                       />
-                    </div>
-                  )}
+                    ) : null;
+                  })()}
                 </div>
               )}
 
-              {post.mediaUrl && (
-                <div className="rounded-lg overflow-hidden border border-border-glass-dark max-h-96">
-                  <img
-                    src={post.mediaUrl}
-                    alt="Attachment"
-                    className="w-full h-auto object-cover"
+              {(() => {
+                const postImg = extractPostImage(post.content, post.mediaUrl);
+                return postImg ? (
+                  <PostMedia
+                    src={postImg}
+                    alt={`Attachment by ${post.author.name}`}
                   />
-                </div>
-              )}
+                ) : null;
+              })()}
 
               <div className="flex items-center justify-between pt-2 border-t border-border-glass-dark text-xs text-outline">
                 <button

@@ -3,6 +3,7 @@ import { X, Image, Send, Upload, AlertCircle, Trash2, Loader2 } from 'lucide-rea
 import { Post, AuthUserProfile } from '../types';
 import { UserAvatar } from './UserAvatar';
 import { uploadImageToBackend, MAX_ALLOWED_IMAGE_SIZE_BYTES } from '../services/api';
+import { extractPostImage } from '../utils/mediaUtils';
 
 interface CastModalProps {
   isOpen: boolean;
@@ -84,6 +85,22 @@ export const CastModal: React.FC<CastModalProps> = ({
     setCustomTags(customTags.filter((t) => t !== tagToRemove));
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleProcessFile(file);
+          return;
+        }
+      }
+    }
+  };
+
   const handlePublish = (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim() || isUploading) return;
@@ -92,10 +109,16 @@ export const CastModal: React.FC<CastModalProps> = ({
     const textTags = content.match(/#([a-zA-Z0-9_\u0080-\uFFFF]+)/g) || [];
     const allTags = Array.from(new Set([...customTags, ...textTags]));
 
+    let finalMedia = mediaUrl.trim() || undefined;
+    if (!finalMedia) {
+      const detected = extractPostImage(content);
+      if (detected) finalMedia = detected;
+    }
+
     onSubmitPost(
       {
         content: content.trim(),
-        mediaUrl: mediaUrl.trim() || undefined,
+        mediaUrl: finalMedia,
         tags: allTags.length > 0 ? allTags : undefined,
       },
       quotingPost ? quotingPost.id : undefined
@@ -137,6 +160,7 @@ export const CastModal: React.FC<CastModalProps> = ({
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
+                onPaste={handlePaste}
                 rows={3}
                 autoFocus
                 placeholder={quotingPost ? 'Add your commentary on this post...' : "What's happening? Share thoughts, updates, or links..."}
@@ -258,6 +282,7 @@ export const CastModal: React.FC<CastModalProps> = ({
                     src={mediaUrl}
                     alt="Preview"
                     className="w-full h-full object-cover max-h-48"
+                    referrerPolicy="no-referrer"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
                     }}

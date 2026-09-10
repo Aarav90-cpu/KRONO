@@ -18,6 +18,7 @@ import {
   saveUserProfileToBackend,
   addCommentOnBackend,
   searchUsersOnBackend,
+  createPostOnBackend,
 } from './api';
 
 /**
@@ -127,13 +128,64 @@ export function subscribeToFirestorePosts(
       });
 
       if (postsList.length > 0) {
-        // Merge with local cached posts so any newly authored local posts are NOT wiped
+        // Merge with local cached posts so any newly authored local posts or pending likes/comments are NOT lost
         const localCached = getLocalCachedPosts();
+        const localMap = new Map(localCached.map((p) => [p.id, p]));
         const remoteIds = new Set(postsList.map((p) => p.id));
+
+        const mergedRemote = postsList.map((remotePost) => {
+          const localMatch = localMap.get(remotePost.id);
+          if (!localMatch) return remotePost;
+
+          // Merge likes: if local user liked it, make sure likedBy and isLiked are preserved
+          const likedBySet = new Set([
+            ...(Array.isArray(remotePost.likedBy) ? remotePost.likedBy : []),
+            ...(Array.isArray(localMatch.likedBy) ? localMatch.likedBy : []),
+          ]);
+          const likedBy = Array.from(likedBySet);
+
+          // Merge bookmarks
+          const bookmarkedBySet = new Set([
+            ...(Array.isArray(remotePost.bookmarkedBy) ? remotePost.bookmarkedBy : []),
+            ...(Array.isArray(localMatch.bookmarkedBy) ? localMatch.bookmarkedBy : []),
+          ]);
+          const bookmarkedBy = Array.from(bookmarkedBySet);
+
+          // Merge comments: union local and remote comments by ID
+          const existingComments = Array.isArray(remotePost.commentsList) ? remotePost.commentsList : [];
+          const localComments = Array.isArray(localMatch.commentsList) ? localMatch.commentsList : [];
+          const commentIds = new Set(existingComments.map((c) => c.id));
+          const combinedComments = [...existingComments];
+          for (const lc of localComments) {
+            if (!commentIds.has(lc.id)) {
+              combinedComments.push(lc);
+              commentIds.add(lc.id);
+            }
+          }
+
+          const isLiked = currentUserUid ? likedBy.includes(currentUserUid) : remotePost.metrics.isLiked;
+          const isBookmarked = currentUserUid ? bookmarkedBy.includes(currentUserUid) : remotePost.metrics.isBookmarked;
+
+          return {
+            ...remotePost,
+            likedBy,
+            bookmarkedBy,
+            commentsList: combinedComments,
+            metrics: {
+              ...remotePost.metrics,
+              likes: Math.max(likedBy.length, remotePost.metrics.likes),
+              comments: Math.max(combinedComments.length, remotePost.metrics.comments),
+              isLiked,
+              isBookmarked,
+            },
+          };
+        });
+
+        // Keep local posts that have not yet been synced to remote
         const nonSyncedLocal = localCached.filter((p) => !remoteIds.has(p.id));
-        const merged = [...nonSyncedLocal, ...postsList];
-        setLocalCachedPosts(merged);
-        onUpdate(merged);
+        const finalMerged = [...nonSyncedLocal, ...mergedRemote];
+        setLocalCachedPosts(finalMerged);
+        onUpdate(finalMerged);
       } else {
         const cached = getLocalCachedPosts();
         if (cached.length > 0) {
@@ -387,21 +439,73 @@ export async function toggleFirestoreRepost(
   currentUser: { uid: string; name: string; username: string; avatar: string },
   quoteComment?: string
 ): Promise<{ isReposted: boolean; sharesCount: number }> {
-  const originalRef = doc(db, 'posts', originalPostId);
-  try {
-    const snap = await getDoc(originalRef);
-    if (!snap.exists()) {
-      throw new Error(`Original post ${originalPostId} does not exist.`);
-    }
-    const data = snap.data();
-    const repostedBy: string[] = Array.isArray(data.repostedBy) ? [...data.repostedBy] : [];
-    const index = repostedBy.indexOf(currentUser.uid);
+  // Update local cache immediately
+  const currentCached = getLocalCachedPosts();
+  let localSharesCount = 0;
+  let isReposted = false;
 
-    // If it's a Quote Post (has custom comment)
-    if (quoteComment && quoteComment.trim()) {
-      const quotePostId = `post_quote_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const originalPost = currentCached.find((p) => p.id === originalPostId);
+  const repostedBy: string[] = Array.isArray(originalPost?.repostedBy)
+    ? [...originalPost.repostedBy]
+    : [];
+  const index = repostedBy.indexOf(currentUser.uid);
+
+  if (quoteComment && quoteComment.trim()) {
+    const quotePostId = `post_quote_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const newQuotePost: Post = {
+      id: quotePostId,
+      author: {
+        id: currentUser.uid,
+        name: currentUser.name.slice(0, 80),
+        handle: currentUser.username.slice(0, 50),
+        avatar: currentUser.avatar || '',
+        verified: false,
+        bio: '',
+      },
+      content: quoteComment.slice(0, 2000),
+      timestamp: 'just now',
+      tags: [],
+      metrics: {
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        isLiked: false,
+        isBookmarked: false,
+        isReposted: false,
+      },
+      likedBy: [],
+      bookmarkedBy: [],
+      repostedBy: [],
+      quotedPost: originalPost
+        ? {
+            id: originalPost.id,
+            author: originalPost.author,
+            content: originalPost.content,
+            mediaUrl: originalPost.mediaUrl,
+            timestamp: originalPost.timestamp,
+          }
+        : undefined,
+      commentsList: [],
+    };
+
+    const updated = currentCached.map((p) => {
+      if (p.id === originalPostId) {
+        return {
+          ...p,
+          metrics: {
+            ...p.metrics,
+            shares: p.metrics.shares + 1,
+          },
+        };
+      }
+      return p;
+    });
+
+    setLocalCachedPosts([newQuotePost, ...updated]);
+
+    // Push to Firestore safely
+    try {
       const quoteRef = doc(db, 'posts', quotePostId);
-
       await setDoc(quoteRef, {
         id: quotePostId,
         authorId: currentUser.uid,
@@ -420,97 +524,139 @@ export async function toggleFirestoreRepost(
         likedBy: [],
         bookmarkedBy: [],
         repostedBy: [],
-        quotedPost: {
-          id: originalPostId,
-          author: {
-            id: data.authorId || '',
-            name: data.authorName || 'Author',
-            handle: data.authorHandle || '@author',
-            avatar: data.authorAvatar || '',
-            verified: Boolean(data.authorVerified),
-          },
-          content: data.content || '',
-          mediaUrl: data.mediaUrl || undefined,
-          timestamp: data.timestamp || 'earlier',
-        },
+        quotedPost: originalPost
+          ? {
+              id: originalPost.id,
+              author: originalPost.author,
+              content: originalPost.content,
+              mediaUrl: originalPost.mediaUrl || '',
+              timestamp: originalPost.timestamp,
+            }
+          : null,
         repost: null,
         commentsList: [],
       });
 
-      // Increment shares on original
-      await updateDoc(originalRef, {
-        sharesCount: (data.sharesCount || 0) + 1,
+      const origRef = doc(db, 'posts', originalPostId);
+      await updateDoc(origRef, {
+        sharesCount: (originalPost?.metrics.shares || 0) + 1,
       });
-
-      return { isReposted: true, sharesCount: (data.sharesCount || 0) + 1 };
+    } catch (err) {
+      console.warn('Firestore quote post sync warning:', err);
     }
 
-    // Direct Repost toggle
-    let isReposted = false;
-    if (index >= 0) {
-      repostedBy.splice(index, 1);
-      isReposted = false;
-    } else {
-      repostedBy.push(currentUser.uid);
-      isReposted = true;
-    }
+    return { isReposted: true, sharesCount: (originalPost?.metrics.shares || 0) + 1 };
+  }
 
-    const newSharesCount = Math.max(0, repostedBy.length);
+  // Direct Repost toggle
+  if (index >= 0) {
+    repostedBy.splice(index, 1);
+    isReposted = false;
+  } else {
+    repostedBy.push(currentUser.uid);
+    isReposted = true;
+  }
+  localSharesCount = repostedBy.length;
+
+  const repostDocId = `repost_${currentUser.uid}_${originalPostId}`;
+
+  let updatedList = currentCached.map((p) => {
+    if (p.id === originalPostId) {
+      return {
+        ...p,
+        repostedBy,
+        metrics: {
+          ...p.metrics,
+          shares: localSharesCount,
+          isReposted,
+        },
+      };
+    }
+    return p;
+  });
+
+  if (isReposted && originalPost) {
+    const repostEntry: Post = {
+      id: repostDocId,
+      author: originalPost.author,
+      content: originalPost.content,
+      mediaUrl: originalPost.mediaUrl,
+      timestamp: originalPost.timestamp,
+      tags: originalPost.tags,
+      metrics: {
+        ...originalPost.metrics,
+        shares: localSharesCount,
+        isReposted: true,
+      },
+      likedBy: originalPost.likedBy,
+      bookmarkedBy: originalPost.bookmarkedBy,
+      repostedBy,
+      repost: {
+        originalPostId: originalPost.id,
+        reposterId: currentUser.uid,
+        reposterName: currentUser.name,
+        reposterHandle: currentUser.username,
+        timestamp: 'just now',
+      },
+      commentsList: originalPost.commentsList,
+    };
+    updatedList = [repostEntry, ...updatedList];
+  } else if (!isReposted) {
+    updatedList = updatedList.filter((p) => p.id !== repostDocId);
+  }
+
+  setLocalCachedPosts(updatedList);
+
+  // Synchronize with Firestore
+  const originalRef = doc(db, 'posts', originalPostId);
+  try {
     await updateDoc(originalRef, {
       repostedBy,
-      sharesCount: newSharesCount,
+      sharesCount: localSharesCount,
     });
 
-    // If direct reposting, also create a feed entry representing the repost
-    if (isReposted) {
-      const repostDocId = `repost_${currentUser.uid}_${originalPostId}`;
+    if (isReposted && originalPost) {
       const repostRef = doc(db, 'posts', repostDocId);
       await setDoc(repostRef, {
         id: repostDocId,
-        authorId: data.authorId,
-        authorName: data.authorName,
-        authorHandle: data.authorHandle,
-        authorAvatar: data.authorAvatar,
-        authorVerified: Boolean(data.authorVerified),
-        content: data.content,
-        mediaUrl: data.mediaUrl || '',
-        tags: data.tags || [],
+        authorId: currentUser.uid,
+        authorName: originalPost.author.name,
+        authorHandle: originalPost.author.handle,
+        authorAvatar: originalPost.author.avatar || '',
+        authorVerified: Boolean(originalPost.author.verified),
+        content: originalPost.content,
+        mediaUrl: originalPost.mediaUrl || '',
+        tags: originalPost.tags || [],
         createdAt: new Date().toISOString(),
-        timestamp: data.timestamp || 'just now',
-        likesCount: data.likesCount || 0,
-        commentsCount: data.commentsCount || 0,
-        sharesCount: newSharesCount,
-        likedBy: data.likedBy || [],
-        bookmarkedBy: data.bookmarkedBy || [],
+        timestamp: 'just now',
+        likesCount: originalPost.metrics.likes || 0,
+        commentsCount: originalPost.metrics.comments || 0,
+        sharesCount: localSharesCount,
+        likedBy: originalPost.likedBy || [],
+        bookmarkedBy: originalPost.bookmarkedBy || [],
         repostedBy,
         repost: {
-          originalPostId,
+          originalPostId: originalPost.id,
           reposterId: currentUser.uid,
           reposterName: currentUser.name,
           reposterHandle: currentUser.username,
           timestamp: 'just now',
         },
         quotedPost: null,
-        commentsList: data.commentsList || [],
+        commentsList: originalPost.commentsList || [],
       });
     } else {
-      // Clean up the direct repost doc
-      const repostDocId = `repost_${currentUser.uid}_${originalPostId}`;
-      try {
-        await deleteDoc(doc(db, 'posts', repostDocId));
-      } catch {
-        // ignore if not found
-      }
+      await deleteDoc(doc(db, 'posts', repostDocId)).catch(() => {});
     }
-
-    return { isReposted, sharesCount: newSharesCount };
   } catch (err) {
-    handleFirestoreError(err, OperationType.UPDATE, `posts/${originalPostId}`);
+    console.warn('Firestore repost update notice (kept locally):', err);
   }
+
+  return { isReposted, sharesCount: localSharesCount };
 }
 
 /**
- * Add a comment to a post in Firestore and synchronize with backend
+ * Add a comment to a post in Firestore and synchronize with local cache & backend
  */
 export async function addFirestoreComment(
   postId: string,
@@ -520,62 +666,61 @@ export async function addFirestoreComment(
   },
   userId?: string
 ): Promise<PostComment> {
-  let createdComment: PostComment | null = null;
-  const postRef = doc(db, 'posts', postId);
+  const newComment: PostComment = {
+    id: `c_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    author: commentData.author,
+    timestamp: 'just now',
+    content: commentData.content.slice(0, 1000),
+  };
 
+  // Update local cache immediately so reloading NEVER drops the comment
+  const currentCached = getLocalCachedPosts();
+  const updatedPosts = currentCached.map((p) => {
+    if (p.id === postId) {
+      const list = Array.isArray(p.commentsList) ? [...p.commentsList, newComment] : [newComment];
+      return {
+        ...p,
+        commentsList: list,
+        metrics: {
+          ...p.metrics,
+          comments: list.length,
+        },
+      };
+    }
+    return p;
+  });
+  setLocalCachedPosts(updatedPosts);
+
+  // Firestore update with safe fallback
+  const postRef = doc(db, 'posts', postId);
   try {
     const snap = await getDoc(postRef);
     if (snap.exists()) {
       const data = snap.data();
-      const commentsList: PostComment[] = Array.isArray(data.commentsList)
-        ? [...data.commentsList]
-        : [];
-
-      const newComment: PostComment = {
-        id: `c_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
-        author: commentData.author,
-        timestamp: 'just now',
-        content: commentData.content.slice(0, 1000),
-      };
-
-      commentsList.push(newComment);
-
+      const firestoreComments = Array.isArray(data.commentsList) ? [...data.commentsList] : [];
+      firestoreComments.push(newComment);
       await updateDoc(postRef, {
-        commentsList,
-        commentsCount: commentsList.length,
+        commentsList: firestoreComments,
+        commentsCount: firestoreComments.length,
       });
-
-      createdComment = newComment;
     }
   } catch (err) {
-    console.warn('Firestore comment update had warning, will ensure backend persistence:', err);
+    console.warn('Firestore comment update notice (persisted in local cache):', err);
   }
 
   // Always synchronize to the Express backend database for dual persistence
   try {
-    const backendRes = await addCommentOnBackend(
+    await addCommentOnBackend(
       postId,
       commentData.content,
       commentData.author,
       userId
     );
-    if (backendRes?.comment && !createdComment) {
-      createdComment = backendRes.comment;
-    }
   } catch (backendErr) {
-    console.warn('Backend comment sync warning:', backendErr);
+    console.warn('Backend comment sync notice:', backendErr);
   }
 
-  if (createdComment) {
-    return createdComment;
-  }
-
-  return {
-    id: `c_${Date.now()}`,
-    author: commentData.author,
-    timestamp: 'just now',
-    content: commentData.content,
-  };
+  return newComment;
 }
 
 /**

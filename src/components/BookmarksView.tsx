@@ -1,6 +1,9 @@
 import React from 'react';
 import { Post } from '../types';
 import { UserAvatar } from './UserAvatar';
+import { PostMedia } from './PostMedia';
+import { FormattedContent } from './FormattedContent';
+import { extractPostImage } from '../utils/mediaUtils';
 import { Bookmark, MessageSquare, Heart, Share2, ArrowLeft } from 'lucide-react';
 
 interface BookmarksViewProps {
@@ -99,20 +102,21 @@ export const BookmarksView: React.FC<BookmarksViewProps> = ({
               </div>
 
               {/* Content */}
-              <p className="text-sm text-on-surface leading-relaxed whitespace-pre-line">
-                {post.content}
-              </p>
+              <FormattedContent
+                content={post.content}
+                className="text-sm text-on-surface leading-relaxed"
+              />
 
               {/* Media */}
-              {post.mediaUrl && (
-                <div className="rounded-lg overflow-hidden border border-border-glass-dark max-h-96">
-                  <img
-                    src={post.mediaUrl}
-                    alt="Post attachment"
-                    className="w-full h-auto object-cover"
+              {(() => {
+                const postImg = extractPostImage(post.content, post.mediaUrl);
+                return postImg ? (
+                  <PostMedia
+                    src={postImg}
+                    alt={`Attachment by ${post.author.name}`}
                   />
-                </div>
-              )}
+                ) : null;
+              })()}
 
               {/* Tags */}
               {post.tags && post.tags.length > 0 && (

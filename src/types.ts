@@ -101,6 +101,7 @@ export interface AuthUserProfile {
   birthDate?: string;
   age?: number;
   ageVerified: boolean;
+  verified?: boolean;
   location?: string;
   bio?: string;
   website?: string;
